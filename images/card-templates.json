@@ -1,0 +1,306 @@
+{
+  "categories": [
+    {
+      "id": "general",
+      "name": "常规",
+      "sortOrder": 1
+    },
+    {
+      "id": "goodnight",
+      "name": "晚安",
+      "sortOrder": 2
+    },
+    {
+      "id": "family",
+      "name": "亲子",
+      "sortOrder": 3
+    },
+    {
+      "id": "music",
+      "name": "音乐贺卡",
+      "sortOrder": 4
+    },
+    {
+      "id": "kinship",
+      "name": "亲情",
+      "sortOrder": 5
+    },
+    {
+      "id": "healing",
+      "name": "治愈",
+      "sortOrder": 6
+    },
+    {
+      "id": "encourage",
+      "name": "鼓励",
+      "sortOrder": 7
+    },
+    {
+      "id": "festival",
+      "name": "节日",
+      "sortOrder": 8
+    },
+    {
+      "id": "rain",
+      "name": "雨夜听窗",
+      "sortOrder": 9
+    }
+  ],
+  "templates": [
+    {
+      "id": "tpl_default",
+      "categoryId": "general",
+      "name": "默认背景",
+      "defaultGradient": true,
+      "sortOrder": 0,
+      "gradientTemplate": 1
+    },
+    {
+      "id": "tpl_general_01",
+      "categoryId": "general",
+      "name": "常规 01",
+      "file": "1.png",
+      "sortOrder": 1,
+      "gradientTemplate": 1,
+      "textLayout": "middle"
+    },
+    {
+      "id": "tpl_general_02",
+      "categoryId": "general",
+      "name": "常规 02",
+      "file": "2.png",
+      "sortOrder": 2,
+      "gradientTemplate": 1,
+      "textLayout": "top"
+    },
+    {
+      "id": "tpl_general_03",
+      "categoryId": "general",
+      "name": "常规 03",
+      "file": "3.png",
+      "sortOrder": 3,
+      "gradientTemplate": 1,
+      "textLayout": "middle"
+    },
+    {
+      "id": "tpl_general_04",
+      "categoryId": "general",
+      "name": "常规 04",
+      "file": "4.png",
+      "sortOrder": 4,
+      "gradientTemplate": 1,
+      "textLayout": "bottom"
+    },
+    {
+      "id": "tpl_general_05",
+      "categoryId": "general",
+      "name": "常规 05",
+      "file": "5.png",
+      "sortOrder": 5,
+      "gradientTemplate": 2,
+      "textLayout": "middle"
+    },
+    {
+      "id": "tpl_general_06",
+      "categoryId": "general",
+      "name": "常规 06",
+      "file": "6.png",
+      "sortOrder": 6,
+      "gradientTemplate": 2,
+      "textLayout": "top"
+    },
+    {
+      "id": "tpl_general_07",
+      "categoryId": "general",
+      "name": "常规 07",
+      "file": "7.png",
+      "sortOrder": 7,
+      "gradientTemplate": 2,
+      "textLayout": "bottom"
+    },
+    {
+      "id": "tpl_general_08",
+      "categoryId": "general",
+      "name": "常规 08",
+      "file": "8.png",
+      "sortOrder": 8,
+      "gradientTemplate": 3,
+      "textLayout": "middle"
+    },
+    {
+      "id": "tpl_general_09",
+      "categoryId": "general",
+      "name": "常规 09",
+      "file": "9.png",
+      "sortOrder": 9,
+      "gradientTemplate": 3,
+      "textLayout": "top"
+    },
+    {
+      "id": "tpl_general_10",
+      "categoryId": "general",
+      "name": "常规 10",
+      "file": "10.png",
+      "sortOrder": 10,
+      "gradientTemplate": 3,
+      "textLayout": "bottom"
+    },
+    {
+      "id": "tpl_general_11",
+      "categoryId": "general",
+      "name": "常规 11",
+      "file": "11.png",
+      "sortOrder": 11,
+      "gradientTemplate": 4,
+      "textLayout": "middle"
+    },
+    {
+      "id": "tpl_general_12",
+      "categoryId": "general",
+      "name": "常规 12",
+      "file": "12.png",
+      "sortOrder": 12,
+      "gradientTemplate": 4,
+      "textLayout": "top"
+    },
+    {
+      "id": "tpl_general_13",
+      "categoryId": "general",
+      "name": "常规 13",
+      "file": "13.png",
+      "sortOrder": 13,
+      "gradientTemplate": 4,
+      "textLayout": "bottom"
+    },
+    {
+      "id": "tpl_general_14",
+      "categoryId": "general",
+      "name": "常规 14",
+      "file": "14.png",
+      "sortOrder": 14,
+      "gradientTemplate": 4,
+      "textLayout": "middle"
+    },
+    {
+      "id": "tpl_goodnight_01",
+      "categoryId": "goodnight",
+      "name": "晚安好梦",
+      "file": "goodnight-01.png",
+      "sortOrder": 1,
+      "gradientTemplate": 1,
+      "textLayout": "goodnightMiddle",
+      "charsPerLine": 16
+      
+    },
+    {
+      "id": "tpl_goodnight_02",
+      "categoryId": "goodnight",
+      "name": "星光陪伴",
+      "file": "goodnight-02.png",
+      "sortOrder": 2,
+      "gradientTemplate": 1,
+      "textLayout": "goodnightMiddle",
+      "charsPerLine": 16
+    },
+    {
+      "id": "tpl_goodnight_03",
+      "categoryId": "goodnight",
+      "name": "月色温柔",
+      "file": "goodnight-03.png",
+      "sortOrder": 3,
+      "gradientTemplate": 1,
+      "textLayout": "goodnightBottom",
+      "charsPerLine": 19
+    },
+    {
+      "id": "tpl_goodnight_04",
+      "categoryId": "goodnight",
+      "name": "好眠今夜",
+      "file": "goodnight-04.png",
+      "sortOrder": 4,
+      "gradientTemplate": 2,
+      "textLayout": "goodnightBottom",
+      "charsPerLine": 19
+    },
+    {
+      "id": "tpl_family_01",
+      "categoryId": "family",
+      "name": "亲子陪伴",
+      "file": "family-01.png",
+      "sortOrder": 1,
+      "gradientTemplate": 2,
+      "textLayout": "familyTop",
+      "charsPerLine": 21
+    },
+    {
+      "id": "tpl_family_02",
+      "categoryId": "family",
+      "name": "睡前故事",
+      "file": "family-02.png",
+      "sortOrder": 2,
+      "gradientTemplate": 2,
+      "textLayout": "familyTop",
+      "charsPerLine": 20
+    },
+    {
+      "id": "tpl_family_03",
+      "categoryId": "family",
+      "name": "宝贝好梦",
+      "file": "family-03.png",
+      "sortOrder": 3,
+      "gradientTemplate": 3,
+      "textLayout": "familyBottom",
+      "charsPerLine": 23
+    },
+    {
+      "id": "tpl_family_04",
+      "categoryId": "family",
+      "name": "温暖小家",
+      "file": "family-04.png",
+      "sortOrder": 4,
+      "gradientTemplate": 3,
+      "textLayout": "familyBottom",
+      "charsPerLine": 23
+    },
+    {
+      "id": "tpl_kinship_01",
+      "categoryId": "kinship",
+      "name": "亲情陪伴",
+      "file": "kinship-01.png",
+      "sortOrder": 1,
+      "gradientTemplate": 1,
+      "textLayout": "kinshipTop",
+      "charsPerLine": 15
+    },
+    {
+      "id": "tpl_kinship_02",
+      "categoryId": "kinship",
+      "name": "温暖牵挂",
+      "file": "kinship-02.png",
+      "sortOrder": 2,
+      "gradientTemplate": 2,
+      "textLayout": "kinshipTop",
+      "charsPerLine": 15
+    },
+    {
+      "id": "tpl_music_01",
+      "categoryId": "music",
+      "name": "专属晚安曲",
+      "file": "music-01.png",
+      "sortOrder": 1,
+      "gradientTemplate": 3,
+      "textLayout": "musicTop",
+      "charsPerLine": 15
+    },
+    {
+      "id": "tpl_music_02",
+      "categoryId": "music",
+      "name": "盒中旋律",
+      "file": "music-02.png",
+      "sortOrder": 2,
+      "gradientTemplate": 3,
+      "textLayout": "musicTop",
+      "charsPerLine": 15
+    }
+  ]
+}
