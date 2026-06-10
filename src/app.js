@@ -83,6 +83,7 @@ const {
     mallImageUrl
 } = require('./mall-products-data');
 const { getPromoCampaignsForScene } = require('./promo-data');
+const channelService = require('./channel-service');
 const {
     QRCODE_DIR,
     attachVoucherUiFlags,
@@ -1173,6 +1174,12 @@ function initDatabase() {
         console.warn('[DB] media_sec_tasks:', mediaSecErr.message);
     }
 
+    try {
+        channelService.initChannelModule(db);
+    } catch (channelErr) {
+        console.warn('[DB] 渠道换皮表:', channelErr.message);
+    }
+
     console.log('[DB] 数据库初始化完成');
 }
 
@@ -1237,9 +1244,19 @@ app.post('/api/music/create', authMiddleware, async (req, res) => {
 
         // 保存音乐基本信息
         try {
-            const stmt = db.prepare(`INSERT INTO music_tracks (id, user_id, title, main_instrument, frequency, duration, bpm)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`);
-            stmt.run(musicId, userId, title || '未命名作品', mainInstrument, frequency, duration || 180, bpm);
+            const sourceChannel = channelService.resolveSourceChannel(db, req);
+            const stmt = db.prepare(`INSERT INTO music_tracks (id, user_id, title, main_instrument, frequency, duration, bpm, source_channel)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+            stmt.run(
+                musicId,
+                userId,
+                title || '未命名作品',
+                mainInstrument,
+                frequency,
+                duration || 180,
+                bpm,
+                sourceChannel
+            );
         } catch (err) {
             logError('创建音乐-数据库插入', err, { musicId, userId });
             return sendError(res, convertDbError(err), err.message);
@@ -1847,10 +1864,11 @@ app.post('/api/card/share', authMiddleware, async (req, res) => {
     }
 
     const shareId = uuidv4();
+    const sourceChannel = channelService.resolveSourceChannel(db, req);
 
     try {
-        const stmt = db.prepare(`INSERT INTO card_shares (id, music_id, sender_id, recipient, message, template, template_id, music_instrument, music_frequency, music_bpm, cover_image, audio_url, artist_bg_image, saved_to_library)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const stmt = db.prepare(`INSERT INTO card_shares (id, music_id, sender_id, recipient, message, template, template_id, music_instrument, music_frequency, music_bpm, cover_image, audio_url, artist_bg_image, saved_to_library, source_channel)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         stmt.run(
             shareId,
             musicId,
@@ -1865,7 +1883,8 @@ app.post('/api/card/share', authMiddleware, async (req, res) => {
             coverImage || '',
             audioUrl || '',
             resolved.artistBgImage,
-            savedToLib
+            savedToLib,
+            sourceChannel
         );
 
         if (audioUrl && String(audioUrl).trim()) {
@@ -3583,6 +3602,8 @@ app.post('/api/user/login', async (req, res) => {
             const row = db.prepare('SELECT shop_token FROM users WHERE wx_openid = ?').get(openid);
             loginPayload.shopToken = row && row.shop_token ? row.shop_token : null;
         }
+        const boundChannel = channelService.getUserChannelId(db, userId);
+        loginPayload.channelId = boundChannel || channelService.DEFAULT_CHANNEL_ID;
         sendSuccess(res, loginPayload, '登录成功');
     } catch (err) {
         logError('用户登录', err, { wxCode });
@@ -3761,6 +3782,7 @@ app.get('/api/user/profile', authMiddleware, (req, res) => {
         if (!user) {
             return sendError(res, ErrorCode.USER_NOT_FOUND);
         }
+        const boundChannel = channelService.getUserChannelId(db, user.id);
         sendSuccess(res, {
             userId: user.id,
             openid: user.wx_openid,
@@ -3768,7 +3790,8 @@ app.get('/api/user/profile', authMiddleware, (req, res) => {
             nickname: user.nickname,
             avatarUrl: shopApi.formatUserAvatarForClient(user.avatar_url),
             gender: user.gender,
-            birthday: user.birthday
+            birthday: user.birthday,
+            channelId: boundChannel || channelService.DEFAULT_CHANNEL_ID
         });
     } catch (err) {
         logError('获取用户资料', err);
@@ -4160,10 +4183,52 @@ app.post('/api/shop/thirdDeduct', authMiddleware, async (req, res) => {
     }
 });
 
+/** 渠道换皮配置（公开，小程序冷启动拉取） */
+app.get('/api/branding', (req, res) => {
+    try {
+        const channelRaw = req.query && (req.query.channel || req.query.channelId);
+        const channelId = channelService.normalizeChannelId(channelRaw);
+        const payload = channelService.getBrandingForChannel(db, channelId);
+        return sendSuccess(res, payload, '操作成功');
+    } catch (err) {
+        logError('渠道 branding', err);
+        return sendError(res, convertDbError(err), err.message);
+    }
+});
+
+/** 渠道外观主题预设目录（14 套，不含官方晨雾/眠夜） */
+app.get('/api/channel-theme-presets', (req, res) => {
+    try {
+        const list = channelService.channelThemePresets.listChannelThemePresets();
+        return sendSuccess(res, { presets: list }, '操作成功');
+    } catch (err) {
+        logError('渠道主题预设', err);
+        return sendError(res, convertDbError(err), err.message);
+    }
+});
+
+/** 登录用户绑定渠道（Storage 与后端对齐，用于换机/统计） */
+app.post('/api/user/channel-bind', authMiddleware, (req, res) => {
+    try {
+        const channelRaw = (req.body && (req.body.channel || req.body.channelId)) || '';
+        const source = (req.body && req.body.source) || 'client';
+        const result = channelService.bindUserChannel(db, req.user.id, channelRaw, source);
+        return sendSuccess(res, result, '渠道已绑定');
+    } catch (err) {
+        if (err && err.code === 'CHANNEL_INVALID') {
+            return sendError(res, ErrorCode.INVALID_PARAMS, err.message);
+        }
+        logError('渠道绑定', err);
+        return sendError(res, convertDbError(err), err.message);
+    }
+});
+
 /** 运营弹窗活动列表（小程序 promo-scheduler 拉取） */
 app.get('/api/promo/active', (req, res) => {
     const scene = req.query && req.query.scene ? String(req.query.scene) : '';
-    const list = getPromoCampaignsForScene(scene);
+    const channelRaw = req.query && (req.query.channel || req.query.channelId);
+    const channelId = channelService.normalizeChannelId(channelRaw);
+    const list = getPromoCampaignsForScene(scene, channelId);
     return sendSuccess(res, { list }, '操作成功');
 });
 

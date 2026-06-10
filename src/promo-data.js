@@ -126,8 +126,25 @@ const ACTIVE_CAMPAIGNS = [
     // mianjia_goods 已下线（首页横条入口保留，不再弹居中运营窗）
 ];
 
-function getPromoCampaignsForScene(scene) {
-    const list = ACTIVE_CAMPAIGNS.filter((c) => c.enabled !== false);
+/**
+ * @param {string} [scene]
+ * @param {string} [channelId] 当前渠道；campaign.channelIds 为空表示全渠道
+ */
+function getPromoCampaignsForScene(scene, channelId) {
+    let list = ACTIVE_CAMPAIGNS.filter((c) => c.enabled !== false);
+    const ch = channelId != null ? String(channelId).trim() : '';
+    if (ch && ch !== 'default') {
+        list = list.filter((c) => {
+            const allow = c.channelIds;
+            if (!allow || !Array.isArray(allow) || allow.length === 0) return true;
+            return allow.includes(ch);
+        });
+        list = list.filter((c) => {
+            const deny = c.channelDeny;
+            if (!deny || !Array.isArray(deny) || deny.length === 0) return true;
+            return !deny.includes(ch);
+        });
+    }
     if (!scene) return list;
     return list.filter((c) => Array.isArray(c.scenes) && c.scenes.includes(scene));
 }
