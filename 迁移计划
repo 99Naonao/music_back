@@ -1,0 +1,311 @@
+# Backend 架构迁移计划
+
+> 项目：`lebanhaomian-backend-v2`  
+> 现状：`src/app.js` 约 5300 行、~96 个路由，Express + SQLite + 宝塔单进程  
+> 目标：**不换技术栈**，通过拆分与分层降低维护成本，避免再出现「路由被通配符拦截」类问题  
+> 原则：**渐进式迁移**，每次只迁一个域，迁完可部署、可回滚
+
+---
+
+## 一、现状诊断
+
+### 1.1 已做得好的
+
+| 项 | 说明 |
+|----|------|
+| 技术选型 | Express + SQLite 适合当前规模与宝塔部署 |
+| 局部模块化 | `channel-service`、`card-template-service`、`content-security`、`error-codes` 等已独立 |
+| 工程细节 | 环境变量分层、统一错误码、请求日志、内容安全 |
+
+### 1.2 主要风险
+
+| 风险 | 表现 | 已踩坑示例 |
+|------|------|------------|
+| 上帝文件 | 路由、SQL、迁移、静态资源全在 `app.js` | 改贺卡影响社区 |
+| 路由顺序敏感 | 通配 `/:id` 覆盖固定路径 | `GET /api/card/gift-inbox` 被 `/api/card/:cardId` 拦截 |
+| 无分层 | Handler 内直接 `db.prepare` | 业务逻辑难复用、难测 |
+| 迁移分散 | `initDatabase()` + 零散 `ALTER TABLE` | 多环境字段不一致 |
+| 缺测试 | 仅 `scripts/log-self-test.js` | 回归靠人工 |
+
+### 1.3 暂不建议
+
+- ❌ 换 Nest / Go / 微服务（问题在组织方式，不在框架）
+- ❌ 立刻换 PostgreSQL（SQLite 仍够用）
+- ❌ 全量重写（风险高、周期长）
+
+---
+
+## 二、目标架构
+
+### 2.1 目标目录（迁移完成后）
+
+```
+backend/
+├── src/
+│   ├── app.js                 # 仅：启动、中间件挂载、路由注册、listen（目标 < 200 行）
+│   ├── bootstrap/
+│   │   ├── env.js             # loadEnvFiles（从 app.js 抽出）
+│   │   ├── database.js        # 连接 db、export getDb()
+│   │   └── init-database.js   # 建表 + 迁移入口
+│   ├── middleware/
+│   │   ├── auth.js            # authMiddleware、optionalAuthMiddleware
+│   │   └── request-logger.js  # 已有
+│   ├── routes/
+│   │   ├── index.js           # 汇总 app.use('/api/...', router)
+│   │   ├── health.js
+│   │   ├── media.js           # cover/audio/upload 静态读取
+│   │   ├── music.js
+│   │   ├── card.js            # 含 gift-inbox、share、templates
+│   │   ├── community.js
+│   │   ├── user.js            # login、profile、follow
+│   │   ├── upload.js
+│   │   ├── library.js         # play-history、favorites、notifications
+│   │   ├── mall.js
+│   │   ├── mianjia.js
+│   │   ├── points.js
+│   │   ├── tasks.js
+│   │   ├── promo.js
+│   │   ├── branding.js        # /api/branding、channel-bind、theme-presets
+│   │   ├── shop.js
+│   │   ├── ai.js              # blessing、generate、audio mix
+│   │   └── feedback.js
+│   ├── services/              # 业务逻辑（逐步从 routes 下沉）
+│   │   ├── card-share-service.js
+│   │   ├── gift-inbox-service.js
+│   │   ├── music-service.js
+│   │   └── ...
+│   ├── repositories/          # 可选，P1 后：纯 SQL 封装
+│   │   ├── card-shares.js
+│   │   └── gift-inbox.js
+│   ├── utils/                 # 已有散落 helper 归拢
+│   │   ├── media-url.js       # sanitizeCardShareImageForClient 等
+│   │   └── ...
+│   ├── migrations/            # P1：版本化 SQL
+│   │   ├── 001_initial.sql
+│   │   └── 002_card_gift_inbox.sql
+│   └── （保留现有 *-service.js、error-codes.js 等）
+├── tests/
+│   ├── integration/
+│   │   ├── card-share.test.js
+│   │   └── gift-inbox.test.js
+│   └── helpers/
+│       └── test-app.js        # 内存库 + supertest
+└── scripts/
+    └── migrate.js             # 执行 migrations/
+```
+
+### 2.2 分层约定
+
+```
+HTTP Request
+    → routes/*.js        参数校验、调 service、sendSuccess/sendError
+    → services/*.js      业务规则、组合多个 repo
+    → repositories/*.js  db.prepare，不含 res
+    → database (SQLite)
+```
+
+**规则：**
+
+- Route 内禁止超过 30 行业务逻辑；复杂逻辑进 service
+- 同一表 SQL 只出现在一个 repository（或过渡期一个 service）
+- 返回给客户端的 URL 统一走 `utils/media-url.js` sanitize
+
+---
+
+## 三、路由注册规范（强制）
+
+### 3.1 顺序规则
+
+在每个 `routes/*.js` 文件内：
+
+1. **固定路径**（如 `gift-inbox`、`shares/mine`、`share/:shareId`）
+2. **带前缀的多段路径**（如 `templates/:templateId`）
+3. **通配参数**（如 `/:cardId`、`:musicId`）——**永远放文件末尾**
+
+### 3.2 card 路由正确示例
+
+```javascript
+// routes/card.js — 顺序不可颠倒
+router.post('/gift-inbox', ...)
+router.get('/gift-inbox', ...)
+router.delete('/gift-inbox/:shareId', ...)
+router.post('/share', ...)
+router.get('/shares/mine', ...)
+router.get('/share/:shareId', ...)
+router.get('/template-categories', ...)
+router.get('/templates', ...)
+router.get('/templates/:templateId', ...)
+router.post('/templates/sync', ...)
+router.post('/create', ...)
+router.get('/:cardId', ...)   // 最后
+```
+
+### 3.3 挂载方式
+
+```javascript
+// app.js
+app.use('/api/card', require('./routes/card'));
+```
+
+避免在 `app.js` 继续写 `app.get('/api/card/...')`。
+
+---
+
+## 四、分阶段迁移计划
+
+### 阶段 0：准备（1 天）
+
+- [ ] 新建 `src/routes/`、`src/bootstrap/` 空目录
+- [ ] 从 `app.js` 抽出 `middleware/auth.js`（`authMiddleware`、`optionalAuthMiddleware`）
+- [ ] 从 `app.js` 抽出 `bootstrap/database.js`（`db` 单例 + `getDb()`）
+- [ ] 添加 `tests/helpers/test-app.js`（可选：supertest + 临时 SQLite）
+- [ ] **验收**：`npm run dev` 正常，现有 API 行为不变
+
+### 阶段 1：P0 — 拆路由（1～2 周，优先）
+
+按 **踩坑频率 + 业务重要性** 排序，**一次只迁一个文件**：
+
+| 顺序 | 模块 | 源路由前缀 | 预估路由数 | 备注 |
+|------|------|------------|------------|------|
+| 1 | `routes/card.js` | `/api/card/*` | ~12 | 含 gift-inbox，通配符多 |
+| 2 | `routes/media.js` | cover/audio/upload 读取 | ~10 | 静态与正则路由 |
+| 3 | `routes/music.js` | `/api/music/*` | ~10 | 核心创作链路 |
+| 4 | `routes/user.js` | `/api/user/*` | ~10 | 登录、资料、关注 |
+| 5 | `routes/upload.js` | `POST /api/upload/*` | 2 | 与 media 配合 |
+| 6 | `routes/branding.js` | branding、channel、promo | ~5 | 渠道换皮 |
+| 7 | `routes/community.js` | `/api/community/*` | ~15 | 体量大，单独 PR |
+| 8 | `routes/library.js` | play-history、favorites、notifications | ~12 | |
+| 9 | 其余 | mall、mianjia、points、tasks、shop、ai、feedback | ~20 | 可合并小文件 |
+
+**每个模块迁移步骤（模板）：**
+
+1. 新建 `routes/xxx.js`，`express.Router()`
+2. 从 `app.js` **剪切**对应 `app.get/post/...` 到 router
+3. `app.js` 改为 `app.use('/api/xxx', require('./routes/xxx'))`
+4. 本地 `npm run dev` + 小程序冒烟该域 API
+5. 宝塔部署一次，观察日志
+6. Git commit：`refactor(routes): extract xxx routes from app.js`
+
+**阶段 1 完成标准：**
+
+- [ ] `app.js` 降至 **< 800 行**（启动 + initDatabase + 注册）
+- [ ] 无路由行为变更（小程序全流程冒烟通过）
+- [ ] card 域集成测试 ≥ 3 条（见第五节）
+
+### 阶段 2：P1 — 业务下沉 + 迁移版本化（2～3 周）
+
+| 任务 | 说明 |
+|------|------|
+| `services/card-share-service.js` | 创建分享、resolveTemplate、sanitize 封面 |
+| `services/gift-inbox-service.js` | 收礼箱 CRUD |
+| `repositories/card-shares.js` | card_shares / card_gift_inbox SQL |
+| `utils/media-url.js` | 合并 `sanitizePlayerCoverUrlForClient`、`sanitizeCardShareImageForClient` |
+| `migrations/` | 新建 `schema_migrations` 表，把 `initDatabase` 中 ALTER 改为编号 SQL |
+| `scripts/migrate.js` | 启动时或部署前执行未跑迁移 |
+
+**initDatabase 拆分：**
+
+```
+bootstrap/init-database.js
+  ├── runMigrations()      # 读 migrations/*.sql
+  └── ensureCoreTables()   # 仅 CREATE IF NOT EXISTS（逐步废弃内联 ALTER）
+```
+
+### 阶段 3：P2 — 质量与鉴权（按需）
+
+| 任务 | 触发条件 |
+|------|----------|
+| 集成测试覆盖主链路 | 每次改 card/music/user 必跑 |
+| JWT 或 session 鉴权 | 多客户端 / 安全审计要求 |
+| SQLite → PostgreSQL | 多实例部署、写并发明显瓶颈 |
+| 上传/静态资源迁 CDN | 磁盘与带宽成为瓶颈 |
+| TypeScript 渐进引入 | 团队扩大、需要类型约束时 |
+
+---
+
+## 五、优先补的集成测试（P0 与 card 迁移同步）
+
+| # | 用例 | 断言 |
+|---|------|------|
+| 1 | `POST /api/card/share`（带 coverImage） | 返回 shareId；DB `cover_image` 非空 |
+| 2 | `GET /api/card/share/:shareId` | `coverImage` 为 https 绝对地址 |
+| 3 | `GET /api/card/gift-inbox`（已登录） | 200 + `{ code:0, data.list }`，非 404/4100 |
+| 4 | `POST /api/card/gift-inbox` | 收礼人写入 inbox；自己分享不计入 |
+| 5 | 路由顺序 | `GET /api/card/gift-inbox` 不命中 `/:cardId` |
+
+工具建议：`node:test` + `supertest`（零额外框架）或保持脚本化 curl 清单。
+
+---
+
+## 六、部署与回滚
+
+### 6.1 每次迁移后宝塔操作
+
+1. 上传变更文件（或 git pull）
+2. `npm install`（仅 package.json 变更时）
+3. PM2 / 宝塔 Node 项目 **重启**
+4. 访问 `GET /health`
+5. 小程序冒烟：登录 → 创作 → 贺卡分享 → 收礼 → 收到的贺卡
+
+### 6.2 回滚
+
+- 路由拆分 PR 保持 **行为等价**，回滚 = 还原上一版 `app.js` + `routes/` 目录
+- 数据库迁移（P1 后）只做 **additive**（加表、加列），避免 DROP
+
+---
+
+## 七、时间与人力估算
+
+| 阶段 | 内容 | 预估 |
+|------|------|------|
+| 阶段 0 | 准备、抽 auth/db | 1 人日 |
+| 阶段 1 | 拆完全部路由 | 5～10 人日（可并行 2 域） |
+| 阶段 1 测试 | card + music 集成测试 | 2 人日 |
+| 阶段 2 | service/repo + migrations | 8～12 人日 |
+| **合计（到可维护）** | | **约 3～4 周**（1 人兼职） |
+
+---
+
+## 八、近期执行清单（建议本周）
+
+- [ ] **Day 1**：阶段 0 — 抽 `middleware/auth.js`、`bootstrap/database.js`
+- [ ] **Day 2～3**：迁移 `routes/card.js` + 5 条集成测试
+- [ ] **Day 4**：迁移 `routes/media.js`
+- [ ] **Day 5**：迁移 `routes/music.js`，宝塔部署验证
+- [ ] 在 `routes/card.js` 文件头注释 **路由顺序规范**（第三节）
+
+---
+
+## 九、完成定义（Definition of Done）
+
+迁移阶段性完成，需同时满足：
+
+1. `app.js` 不含业务路由 handler（仅注册）
+2. 通配路由均在各 router 文件 **最后一行**
+3. 小程序主流程冒烟通过（创作、分享、收礼、我的、渠道皮肤）
+4. card 域有自动化测试或 documented curl 清单
+5. 本文档对应 checkbox 更新
+
+---
+
+## 十、参考：当前 app.js 路由域分布（2026-06）
+
+| 域 | 约略路由数 | 目标文件 |
+|----|------------|----------|
+| media（cover/audio/upload 读） | 10 | `routes/media.js` |
+| music | 10 | `routes/music.js` |
+| card（含 gift-inbox） | 12 | `routes/card.js` |
+| community + admin | 16 | `routes/community.js` |
+| user / login / follow | 10 | `routes/user.js` |
+| upload（POST） | 2 | `routes/upload.js` |
+| library（history/favorites/notifications） | 12 | `routes/library.js` |
+| mall / mianjia / shop | 8 | `routes/mall.js` 等 |
+| points / tasks | 6 | `routes/points.js`、`routes/tasks.js` |
+| branding / promo / channel | 5 | `routes/branding.js` |
+| ai / audio mix | 4 | `routes/ai.js` |
+| feedback | 2 | `routes/feedback.js` |
+| health + 旧 /audio | 3 | `routes/health.js`、`routes/media.js` |
+
+---
+
+*文档维护：每完成一个阶段，在第八节勾选并注明完成日期。*

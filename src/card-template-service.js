@@ -305,7 +305,30 @@ function getTemplateById(db, templateId) {
     return mapTemplateRow(row);
 }
 
-function resolveTemplateForShare(db, { templateId, template, artistBgImage }) {
+function resolveTemplateForShare(db, { templateId, template, artistBgImage, hasCustomCover }) {
+    if (hasCustomCover) {
+        if (templateId) {
+            const tpl = db
+                .prepare(
+                    `SELECT id, gradient_template, bg_image_url, cover_url FROM card_templates
+                     WHERE id = ? AND enabled = 1`
+                )
+                .get(String(templateId));
+            if (!tpl) {
+                return { error: 'INVALID_TEMPLATE' };
+            }
+            return {
+                templateId: tpl.id,
+                template: Number(tpl.gradient_template) || 1,
+                artistBgImage: ''
+            };
+        }
+        return {
+            templateId: null,
+            template: Number(template) || 1,
+            artistBgImage: ''
+        };
+    }
     if (templateId) {
         const tpl = db
             .prepare(

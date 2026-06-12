@@ -286,6 +286,19 @@ function sanitizePlayerCoverUrlForClient(urlStr) {
     return normalizePublicCoverUrl(migrated);
 }
 
+/** 贺卡分享图（自定义相册 / 模板底图）返回给客户端的绝对 https 地址 */
+function sanitizeCardShareImageForClient(req, urlStr) {
+    const raw = String(urlStr || '').trim();
+    if (!raw) return '';
+    const hosted = sanitizePlayerCoverUrlForClient(raw);
+    if (hosted) return hosted;
+    if (/^https:\/\//i.test(raw)) return raw;
+    if (raw.startsWith('/')) {
+        return `${getApiBaseUrl(req)}${raw}`;
+    }
+    return raw;
+}
+
 function isOurHostedUploadUrl(urlStr) {
     const raw = String(urlStr || '').trim();
     if (!raw) return false;
@@ -914,6 +927,19 @@ function initDatabase() {
             cover_image TEXT,
             audio_url TEXT,
             created_at DATETIME DEFAULT (datetime('now', 'localtime'))
+        )
+    `);
+
+    // 收礼箱：登录用户打开他人分享的贺卡时入库
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS card_gift_inbox (
+            user_id TEXT NOT NULL,
+            share_id TEXT NOT NULL,
+            sender_id TEXT,
+            first_opened_at DATETIME DEFAULT (datetime('now', 'localtime')),
+            last_opened_at DATETIME DEFAULT (datetime('now', 'localtime')),
+            PRIMARY KEY (user_id, share_id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     `);
 
@@ -1770,11 +1796,134 @@ app.post('/api/card/templates/sync', (req, res) => {
     }
 });
 
+const SHARE_UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isShareUuidString(id) {
+    const s = id != null ? String(id).trim() : '';
+    return s !== '' && SHARE_UUID_RE.test(s);
+}
+
+function mapGiftInboxRow(row) {
+    if (!row) return null;
+    const coverRaw =
+        (row.cover_image && String(row.cover_image).trim()) ||
+        (row.artist_bg_image && String(row.artist_bg_image).trim()) ||
+        '';
+    const musicCover = row.player_cover_url
+        ? sanitizePlayerCoverUrlForClient(row.player_cover_url)
+        : '';
+    const message = row.message != null ? String(row.message) : '';
+    const preview =
+        message.length > 48 ? `${message.slice(0, 48)}…` : message;
+    return {
+        shareId: row.share_id,
+        recipient: row.recipient || '',
+        messagePreview: preview,
+        workTitle: row.work_title || '专属助眠曲',
+        coverUrl: coverRaw || musicCover || '',
+        musicId: row.music_id || '',
+        senderId: row.sender_id || '',
+        sharedAt: row.shared_at || '',
+        firstOpenedAt: row.first_opened_at || '',
+        lastOpenedAt: row.last_opened_at || ''
+    };
+}
+
+/** 收礼人登录后打开贺卡：写入/更新收礼箱（自己发的分享不计入） */
+app.post('/api/card/gift-inbox', authMiddleware, (req, res) => {
+    const shareId = req.body && req.body.shareId != null ? String(req.body.shareId).trim() : '';
+    const userId = req.user.id;
+
+    if (!isShareUuidString(shareId)) {
+        return sendError(res, ErrorCode.MISSING_REQUIRED_PARAM, '分享ID无效');
+    }
+
+    try {
+        const share = db.prepare('SELECT id, sender_id FROM card_shares WHERE id = ?').get(shareId);
+        if (!share) {
+            return sendError(res, ErrorCode.SHARE_NOT_FOUND);
+        }
+        if (share.sender_id && String(share.sender_id) === String(userId)) {
+            return sendSuccess(res, { recorded: false, reason: 'self_share' });
+        }
+
+        db.prepare(
+            `INSERT INTO card_gift_inbox (user_id, share_id, sender_id, first_opened_at, last_opened_at)
+             VALUES (?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+             ON CONFLICT(user_id, share_id) DO UPDATE SET
+               last_opened_at = datetime('now', 'localtime'),
+               sender_id = excluded.sender_id`
+        ).run(userId, shareId, share.sender_id || null);
+
+        logInfo('收礼箱', '已记录', { userId, shareId: shareId.slice(0, 8) + '…' });
+        sendSuccess(res, { recorded: true, shareId });
+    } catch (err) {
+        logError('收礼箱记录', err, { userId, shareId });
+        sendError(res, convertDbError(err), err.message);
+    }
+});
+
+/** 收礼箱列表（须在 /api/card/:cardId 之前注册，否则 gift-inbox 会被当成 cardId） */
+app.get('/api/card/gift-inbox', authMiddleware, (req, res) => {
+    const userId = req.user.id;
+    const limitNum = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+
+    try {
+        const rows = db
+            .prepare(
+                `SELECT i.share_id, i.sender_id, i.first_opened_at, i.last_opened_at,
+                        s.recipient, s.message, s.music_id, s.cover_image, s.artist_bg_image,
+                        s.created_at AS shared_at,
+                        m.title AS work_title, m.player_cover_url
+                 FROM card_gift_inbox i
+                 INNER JOIN card_shares s ON s.id = i.share_id
+                 LEFT JOIN music_tracks m ON m.id = s.music_id
+                 WHERE i.user_id = ?
+                 ORDER BY datetime(i.last_opened_at) DESC
+                 LIMIT ?`
+            )
+            .all(userId, limitNum);
+
+        sendSuccess(res, {
+            list: rows.map(mapGiftInboxRow).filter(Boolean),
+            total: rows.length
+        });
+    } catch (err) {
+        logError('收礼箱列表', err, { userId });
+        sendError(res, convertDbError(err), err.message);
+    }
+});
+
+/** 从收礼箱移除（不删除原分享） */
+app.delete('/api/card/gift-inbox/:shareId', authMiddleware, (req, res) => {
+    const shareId =
+        req.params && req.params.shareId != null ? String(req.params.shareId).trim() : '';
+    const userId = req.user.id;
+
+    if (!isShareUuidString(shareId)) {
+        return sendError(res, ErrorCode.MISSING_REQUIRED_PARAM, '分享ID无效');
+    }
+
+    try {
+        const r = db
+            .prepare('DELETE FROM card_gift_inbox WHERE user_id = ? AND share_id = ?')
+            .run(userId, shareId);
+        sendSuccess(res, { removed: r.changes > 0 });
+    } catch (err) {
+        logError('收礼箱移除', err, { userId, shareId });
+        sendError(res, convertDbError(err), err.message);
+    }
+});
+
 app.get('/api/card/:cardId', (req, res) => {
     const { cardId } = req.params;
 
     if (!cardId) {
         return sendError(res, ErrorCode.MISSING_REQUIRED_PARAM, '贺卡ID不能为空');
+    }
+    if (cardId === 'gift-inbox') {
+        return sendError(res, ErrorCode.UNAUTHORIZED, '请先登录');
     }
 
     try {
@@ -1843,6 +1992,7 @@ app.post('/api/card/share', authMiddleware, async (req, res) => {
     }
 
     const coverRaw = coverImage != null ? String(coverImage).trim() : '';
+    const hasCustomCover = coverRaw !== '';
     if (coverRaw && (await blockIfHostedImageUnsafe(res, coverRaw, req, 'coverImage'))) {
         logWarn('贺卡分享', '创建失败：封面图安全未通过', { senderId, musicId });
         return;
@@ -1851,7 +2001,8 @@ app.post('/api/card/share', authMiddleware, async (req, res) => {
     const resolved = cardTemplates.resolveTemplateForShare(db, {
         templateId,
         template,
-        artistBgImage
+        artistBgImage,
+        hasCustomCover
     });
     if (resolved.error === 'INVALID_TEMPLATE') {
         logWarn('贺卡分享', '创建失败：模板无效', {
@@ -1895,7 +2046,8 @@ app.post('/api/card/share', authMiddleware, async (req, res) => {
             shareId,
             senderId,
             musicId,
-            templateId: resolved.templateId || ''
+            templateId: resolved.templateId || '',
+            hasCustomCover
         });
         sendSuccess(res, { shareId, templateId: resolved.templateId }, '分享创建成功');
     } catch (err) {
@@ -1977,6 +2129,7 @@ app.get('/api/card/share/:shareId', (req, res) => {
 
         let workTitle = ''
         let musicCoverUrl = ''
+        let durationSec = 0
         if (share.music_id) {
             try {
                 const track = db
@@ -1993,6 +2146,12 @@ app.get('/api/card/share/:shareId', (req, res) => {
                     if (!share.audio_url && track.audio_url) {
                         share.audio_url = track.audio_url
                     }
+                    const ms = track.audio_duration_ms
+                    if (ms != null && Number(ms) > 0) {
+                        durationSec = Math.max(1, Math.ceil(Number(ms) / 1000))
+                    } else if (track.duration != null && Number(track.duration) > 0) {
+                        durationSec = Math.floor(Number(track.duration))
+                    }
                 }
             } catch (trackErr) {
                 logWarn('获取分享贺卡关联曲目', trackErr, { shareId, musicId: share.music_id })
@@ -2005,7 +2164,9 @@ app.get('/api/card/share/:shareId', (req, res) => {
             senderId: share.sender_id,
             recipient: share.recipient ? String(share.recipient).slice(0, 20) : '',
             workTitle: workTitle || '',
-            hasMusicCover: !!musicCoverUrl
+            hasCustomCover: !!(share.cover_image && String(share.cover_image).trim()),
+            hasMusicCover: !!musicCoverUrl,
+            durationSec
         });
         sendSuccess(res, {
             shareId: share.id,
@@ -2020,14 +2181,15 @@ app.get('/api/card/share/:shareId', (req, res) => {
             charsPerLine,
             workTitle,
             musicCoverUrl,
+            durationSec,
             musicInfo: {
                 instrument: share.music_instrument,
                 frequency: share.music_frequency,
                 bpm: share.music_bpm
             },
-            coverImage: share.cover_image,
+            coverImage: sanitizeCardShareImageForClient(req, share.cover_image),
             audioUrl: share.audio_url,
-            artistBgImage: share.artist_bg_image || '',
+            artistBgImage: sanitizeCardShareImageForClient(req, share.artist_bg_image),
             createdAt: share.created_at
         });
     } catch (err) {
@@ -2035,7 +2197,6 @@ app.get('/api/card/share/:shareId', (req, res) => {
         sendError(res, convertDbError(err), err.message);
     }
 });
-
 
 app.post('/api/community/post', authMiddleware, async (req, res) => {
     const { title, content, images, topic, musicId } = req.body;
