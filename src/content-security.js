@@ -333,29 +333,46 @@ async function checkTexts(openid, items) {
     return skippedWechat ? { pass: true, skipped: true } : { pass: true };
 }
 
-async function checkImageFile(filePath) {
+async function checkImageFile(filePath, options = {}) {
     if (isSecCheckSkipped()) return { pass: true, skipped: true };
     if (!hasWxCredentials()) return { pass: true, skipped: true };
     if (!filePath || !fs.existsSync(filePath)) {
         throw new Error('图片文件不存在');
     }
 
-    const token = await getAccessToken();
+    const cred = resolveWxCredentials(getDefaultAppId());
+    let token = await getAccessToken();
     if (!token) return { pass: true, skipped: true };
 
-    const form = new FormData();
-    form.append('media', fs.createReadStream(filePath));
+    const postCheck = async (accessToken) => {
+        const form = new FormData();
+        form.append('media', fs.createReadStream(filePath));
+        const res = await axios.post(`${IMG_SEC_CHECK_URL}?access_token=${accessToken}`, form, {
+            headers: form.getHeaders(),
+            timeout: Number(process.env.WX_API_TIMEOUT_MS || 30000),
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+        });
+        return res.data || {};
+    };
 
-    const res = await axios.post(`${IMG_SEC_CHECK_URL}?access_token=${token}`, form, {
-        headers: form.getHeaders(),
-        timeout: Number(process.env.WX_API_TIMEOUT_MS || 30000),
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity
-    });
+    let data = await postCheck(token);
+    if (data.errcode === 40001 && !options._retried && cred) {
+        tokenCacheByApp.delete(cred.appId);
+        token = await getAccessToken();
+        if (token) {
+            data = await postCheck(token);
+        }
+    }
 
-    const data = res.data || {};
     if (data.errcode === 0) return { pass: true, raw: data };
     if (data.errcode === 87014) return { pass: false, raw: data };
+    if (data.errcode === 40005) {
+        return { pass: false, invalidMedia: true, reason: 'type', raw: data };
+    }
+    if (data.errcode === 40006) {
+        return { pass: false, invalidMedia: true, reason: 'size', raw: data };
+    }
     throw new Error(data.errmsg || `imgSecCheck errcode=${data.errcode}`);
 }
 

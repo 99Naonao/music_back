@@ -95,12 +95,12 @@ const ErrorCode = {
     DB_FOREIGN_KEY_ERROR: { code: 5007, message: '关联数据不存在', httpStatus: 400 },
 
     // ==================== 外部API错误 (6000-6999) ====================
-    AI_SERVICE_ERROR: { code: 6000, message: 'AI服务调用失败', httpStatus: 502 },
-    MINIMAX_API_ERROR: { code: 6001, message: 'MiniMax API调用失败', httpStatus: 502 },
-    DEEPSEEK_API_ERROR: { code: 6002, message: 'DeepSeek API调用失败', httpStatus: 502 },
-    WECHAT_API_ERROR: { code: 6003, message: '微信API调用失败', httpStatus: 502 },
-    EXTERNAL_API_TIMEOUT: { code: 6004, message: '外部服务请求超时', httpStatus: 504 },
-    // 小程序 wx.request 仅 2xx 会解析 body；商城代理错误用 200 + code，勿用 502
+    // 小程序端（wx.request / wx.uploadFile）应读 body.code / body.message，勿依赖 HTTP 502/504
+    AI_SERVICE_ERROR: { code: 6000, message: 'AI服务调用失败', httpStatus: 200 },
+    MINIMAX_API_ERROR: { code: 6001, message: 'MiniMax API调用失败', httpStatus: 200 },
+    DEEPSEEK_API_ERROR: { code: 6002, message: 'DeepSeek API调用失败', httpStatus: 200 },
+    WECHAT_API_ERROR: { code: 6003, message: '微信API调用失败', httpStatus: 200 },
+    EXTERNAL_API_TIMEOUT: { code: 6004, message: '外部服务请求超时', httpStatus: 200 },
     MALL_API_ERROR: { code: 6005, message: '商城系统接口调用失败', httpStatus: 200 },
     API_RATE_LIMITED: { code: 6006, message: '第三方API调用频率受限', httpStatus: 429 },
     API_KEY_INVALID: { code: 6007, message: 'API密钥无效或已过期', httpStatus: 401 },
@@ -172,6 +172,15 @@ function errorResponse(errorCode, extraMessage = '', details = null) {
 function sendError(res, errorCode, extraMessage = '', details = null) {
     const response = errorResponse(errorCode, extraMessage, details);
     return res.status(errorCode.httpStatus || 500).json(response);
+}
+
+/**
+ * 小程序 API 业务错误：固定 HTTP 200 + { code, message }
+ * 避免前端只能看到「HTTP 502」而读不到 message
+ */
+function sendMiniError(res, errorCode, extraMessage = '', details = null) {
+    const response = errorResponse(errorCode, extraMessage, details);
+    return res.status(200).json(response);
 }
 
 /**
@@ -286,6 +295,7 @@ module.exports = {
     successResponse,
     errorResponse,
     sendError,
+    sendMiniError,
     sendSuccess,
     logError,
     logWarn,

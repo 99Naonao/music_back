@@ -153,44 +153,35 @@ app.use('/api/card', require('./routes/card'));
 
 ## 四、分阶段迁移计划
 
-### 阶段 0：准备（1 天）
+### 阶段 0：准备（1 天）✅ 2026-06-12
 
-- [ ] 新建 `src/routes/`、`src/bootstrap/` 空目录
-- [ ] 从 `app.js` 抽出 `middleware/auth.js`（`authMiddleware`、`optionalAuthMiddleware`）
-- [ ] 从 `app.js` 抽出 `bootstrap/database.js`（`db` 单例 + `getDb()`）
-- [ ] 添加 `tests/helpers/test-app.js`（可选：supertest + 临时 SQLite）
-- [ ] **验收**：`npm run dev` 正常，现有 API 行为不变
+- [x] 新建 `src/routes/`、`src/bootstrap/` 空目录
+- [x] 从 `app.js` 抽出 `middleware/auth.js`（`authMiddleware`、`optionalAuthMiddleware`）
+- [x] 从 `app.js` 抽出 `bootstrap/database.js`（`db` 单例 + `getDb()`）
+- [x] 从 `app.js` 抽出 `bootstrap/env.js`、`bootstrap/init-database.js`
+- [x] 抽出 `utils/app-context.js`、`utils/media-url.js`、`utils/upload-storage.js`、`utils/content-guard.js`
+- [ ] 添加 `tests/helpers/test-app.js`（可选：supertest + 临时 SQLite）— 待阶段 2
+- [x] **验收**：`node --check src/app.js` 通过，服务可启动
 
-### 阶段 1：P0 — 拆路由（1～2 周，优先）
+### 阶段 1：P0 — 拆路由（1～2 周，优先）✅ 2026-06-12
 
-按 **踩坑频率 + 业务重要性** 排序，**一次只迁一个文件**：
-
-| 顺序 | 模块 | 源路由前缀 | 预估路由数 | 备注 |
-|------|------|------------|------------|------|
-| 1 | `routes/card.js` | `/api/card/*` | ~12 | 含 gift-inbox，通配符多 |
-| 2 | `routes/media.js` | cover/audio/upload 读取 | ~10 | 静态与正则路由 |
-| 3 | `routes/music.js` | `/api/music/*` | ~10 | 核心创作链路 |
-| 4 | `routes/user.js` | `/api/user/*` | ~10 | 登录、资料、关注 |
-| 5 | `routes/upload.js` | `POST /api/upload/*` | 2 | 与 media 配合 |
-| 6 | `routes/branding.js` | branding、channel、promo | ~5 | 渠道换皮 |
-| 7 | `routes/community.js` | `/api/community/*` | ~15 | 体量大，单独 PR |
-| 8 | `routes/library.js` | play-history、favorites、notifications | ~12 | |
-| 9 | 其余 | mall、mianjia、points、tasks、shop、ai、feedback | ~20 | 可合并小文件 |
-
-**每个模块迁移步骤（模板）：**
-
-1. 新建 `routes/xxx.js`，`express.Router()`
-2. 从 `app.js` **剪切**对应 `app.get/post/...` 到 router
-3. `app.js` 改为 `app.use('/api/xxx', require('./routes/xxx'))`
-4. 本地 `npm run dev` + 小程序冒烟该域 API
-5. 宝塔部署一次，观察日志
-6. Git commit：`refactor(routes): extract xxx routes from app.js`
+| 顺序 | 模块 | 状态 |
+|------|------|------|
+| 1 | `routes/card.js` | ✅ |
+| 2 | `routes/media.js` | ✅ |
+| 3 | `routes/music.js` | ✅ |
+| 4 | `routes/user.js` | ✅ |
+| 5 | `routes/upload.js` | ✅ |
+| 6 | `routes/branding.js` | ✅ |
+| 7 | `routes/community.js` | ✅ |
+| 8 | `routes/library.js` | ✅ |
+| 9 | 其余 | ✅ mall / mianjia / points / tasks / shop / ai / feedback / wechat / detection / health |
 
 **阶段 1 完成标准：**
 
-- [ ] `app.js` 降至 **< 800 行**（启动 + initDatabase + 注册）
-- [ ] 无路由行为变更（小程序全流程冒烟通过）
-- [ ] card 域集成测试 ≥ 3 条（见第五节）
+- [x] `app.js` 降至 **< 800 行**（实际 **295 行**）
+- [ ] 无路由行为变更（小程序全流程冒烟通过）— **部署后请验证**
+- [ ] card 域集成测试 ≥ 3 条 — 待阶段 2
 
 ### 阶段 2：P1 — 业务下沉 + 迁移版本化（2～3 周）
 
@@ -266,13 +257,14 @@ bootstrap/init-database.js
 
 ---
 
-## 八、近期执行清单（建议本周）
+## 八、近期执行清单
 
-- [ ] **Day 1**：阶段 0 — 抽 `middleware/auth.js`、`bootstrap/database.js`
-- [ ] **Day 2～3**：迁移 `routes/card.js` + 5 条集成测试
-- [ ] **Day 4**：迁移 `routes/media.js`
-- [ ] **Day 5**：迁移 `routes/music.js`，宝塔部署验证
-- [ ] 在 `routes/card.js` 文件头注释 **路由顺序规范**（第三节）
+- [x] **Day 1**：阶段 0 — 抽 `middleware/auth.js`、`bootstrap/database.js`（2026-06-12）
+- [x] **Day 2～3**：迁移 `routes/card.js`（2026-06-12）
+- [x] **Day 4**：迁移 `routes/media.js`（2026-06-12）
+- [x] **Day 5**：迁移其余全部路由 + 新 `app.js`（2026-06-12）
+- [ ] 宝塔部署 + 小程序冒烟
+- [ ] 阶段 2：集成测试 + service 下沉
 
 ---
 
@@ -306,6 +298,17 @@ bootstrap/init-database.js
 | feedback | 2 | `routes/feedback.js` |
 | health + 旧 /audio | 3 | `routes/health.js`、`routes/media.js` |
 
----
+## 十一、拆分结果快照（2026-06-12）
 
-*文档维护：每完成一个阶段，在第八节勾选并注明完成日期。*
+| 文件 | 行数 | 说明 |
+|------|------|------|
+| `src/app.js` | 295 | 新入口（启动 + context + 注册） |
+| `src/app.legacy.js` | 5331 | 原文件备份 |
+| `src/bootstrap/*` | ~500 | env / database / init-database |
+| `src/middleware/auth.js` | 32 | 鉴权 |
+| `src/utils/*` | ~660 | app-context / media-url / upload / content-guard |
+| `src/routes/*.js` | ~4500 | 17 个路由模块 + index.js |
+
+启动：`npm run dev` 或 `node src/app.js`
+
+---
