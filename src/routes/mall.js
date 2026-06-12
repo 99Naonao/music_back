@@ -4,98 +4,25 @@
 const express = require('express');
 const router = express.Router();
 const ctx = require('../utils/app-context');
-const { authMiddleware, optionalAuthMiddleware } = require('../middleware/auth');
+const { getMallClientConfig } = require('../mall-qrcode');
+const mallCatalog = require('../services/mall-catalog-service');
 
-const {
-    getDb,
-    sendError,
-    sendSuccess,
-    successResponse,
-    errorResponse,
-    ErrorCode,
-    logError,
-    logWarn,
-    logInfo,
-    convertDbError,
-    formatConsoleTimestampCn,
-    uuidv4,
-    axios,
-    crypto,
-    path,
-    fs,
-    contentSecurity,
-    shopApi,
-    wxMiniApps,
-    channelService,
-    cardTemplates,
-    musicAudioStore,
-    mediaSecStore,
-    uploadDir,
-    libraryAudioDir,
-    upload,
-    blockIfContentUnsafe,
-    blockIfImagesUnsafe,
-    blockIfHostedImageUnsafe,
-    scheduleAudioMediaCheck,
-    verifyWechatMsgSignature,
-    getApiBaseUrl,
-    buildPublicUploadUrl,
-    getUploadPublicPathForFilename,
-    buildPublicAudioUploadUrl,
-    migrateLegacyCoverUrlToMusicCover,
-    normalizePublicCoverUrl,
-    sanitizePlayerCoverUrlForClient,
-    sanitizeCardShareImageForClient,
-    sanitizeCommunityImagesForClient,
-    isOurHostedUploadUrl,
-    resolveReferenceAudioProbeTarget,
-    resolveHostedUploadToDisk,
-    normalizeLibraryAudioUrl,
-    resolveLibraryCoverRel,
-    toAbsoluteCoverUrl,
-    generateMusic,
-    checkGenerationStatus,
-    isMinimaxMockAllowed,
-    generateBlessing,
-    generateBlessingOffline,
-    mixEffects,
-    mixFinalAudio,
-    probeAudioDurationSec,
-    assertReferenceAudioDurationSec,
-    AUDIO_DIR,
-    MALL_PRODUCTS_DATA,
-    getMallProductByIdFromStore,
-    mallImageUrl,
-    exposeQrcodeIfEnabled,
-    exposeQrcodeListIfEnabled,
-    getPromoCampaignsForScene,
-    getMianjiaProducts,
-    POINTS_TYPE,
-    bedAccessToken,
-    persistShopTokenFromPayload,
-    requireShopToken,
-    callShopWithAutoRefresh,
-    recordPointsLedger,
-    getOrInitPoints
-} = ctx;
-const db = getDb();
+const { sendError, sendSuccess, ErrorCode } = ctx;
 
 router.get('/config', (req, res) => {
     return sendSuccess(res, getMallClientConfig(), '操作成功');
 });
 
-/** 积分商城商品列表（无需登录；小程序优先拉取，图片 URL 由后台维护） */
 router.get('/products', (req, res) => {
-    return sendSuccess(res, exposeQrcodeListIfEnabled(MALL_PRODUCTS_DATA, mallImageUrl), '操作成功');
+    return sendSuccess(res, mallCatalog.listProducts(ctx), '操作成功');
 });
 
-/** 单个商品详情（用于详情页校验 id） */
 router.get('/product/:id', (req, res) => {
-    const p = getMallProductByIdFromStore(req.params.id);
-    if (!p) {
-        return sendError(res, ErrorCode.MALL_PRODUCT_NOT_FOUND);
+    const result = mallCatalog.getProductById(ctx, req.params.id);
+    if (!result.ok) {
+        return sendError(res, result.error);
     }
-    return sendSuccess(res, exposeQrcodeIfEnabled(p, mallImageUrl), '操作成功');
+    return sendSuccess(res, result.data, '操作成功');
 });
 
 module.exports = router;

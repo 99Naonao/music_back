@@ -31,4 +31,16 @@ function getDb() {
     return db || initDatabaseConnection();
 }
 
-module.exports = { getDb, getDbPath, initDatabaseConnection, getDataDir };
+function resetDatabaseConnection() {
+    if (db) {
+        try {
+            db.close();
+        } catch (e) {
+            /* ignore */
+        }
+    }
+    db = null;
+    dbPath = null;
+}
+
+module.exports = { getDb, getDbPath, initDatabaseConnection, getDataDir, resetDatabaseConnection };

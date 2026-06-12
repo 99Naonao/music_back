@@ -4,87 +4,25 @@
 const express = require('express');
 const router = express.Router();
 const ctx = require('../utils/app-context');
-const { authMiddleware, optionalAuthMiddleware } = require('../middleware/auth');
+const { authMiddleware } = require('../middleware/auth');
+const brandingService = require('../services/branding-service');
 
 const {
     getDb,
     sendError,
     sendSuccess,
-    successResponse,
-    errorResponse,
     ErrorCode,
     logError,
-    logWarn,
-    logInfo,
     convertDbError,
-    formatConsoleTimestampCn,
-    uuidv4,
-    axios,
-    crypto,
-    path,
-    fs,
-    contentSecurity,
-    shopApi,
-    wxMiniApps,
     channelService,
-    cardTemplates,
-    musicAudioStore,
-    mediaSecStore,
-    uploadDir,
-    libraryAudioDir,
-    upload,
-    blockIfContentUnsafe,
-    blockIfImagesUnsafe,
-    blockIfHostedImageUnsafe,
-    scheduleAudioMediaCheck,
-    verifyWechatMsgSignature,
-    getApiBaseUrl,
-    buildPublicUploadUrl,
-    getUploadPublicPathForFilename,
-    buildPublicAudioUploadUrl,
-    migrateLegacyCoverUrlToMusicCover,
-    normalizePublicCoverUrl,
-    sanitizePlayerCoverUrlForClient,
-    sanitizeCardShareImageForClient,
-    sanitizeCommunityImagesForClient,
-    isOurHostedUploadUrl,
-    resolveReferenceAudioProbeTarget,
-    resolveHostedUploadToDisk,
-    normalizeLibraryAudioUrl,
-    resolveLibraryCoverRel,
-    toAbsoluteCoverUrl,
-    generateMusic,
-    checkGenerationStatus,
-    isMinimaxMockAllowed,
-    generateBlessing,
-    generateBlessingOffline,
-    mixEffects,
-    mixFinalAudio,
-    probeAudioDurationSec,
-    assertReferenceAudioDurationSec,
-    AUDIO_DIR,
-    MALL_PRODUCTS_DATA,
-    getMallProductByIdFromStore,
-    mallImageUrl,
-    exposeQrcodeIfEnabled,
-    exposeQrcodeListIfEnabled,
-    getPromoCampaignsForScene,
-    getMianjiaProducts,
-    POINTS_TYPE,
-    bedAccessToken,
-    persistShopTokenFromPayload,
-    requireShopToken,
-    callShopWithAutoRefresh,
-    recordPointsLedger,
-    getOrInitPoints
+    getPromoCampaignsForScene
 } = ctx;
 const db = getDb();
 
 router.get('/branding', (req, res) => {
     try {
         const channelRaw = req.query && (req.query.channel || req.query.channelId);
-        const channelId = channelService.normalizeChannelId(channelRaw);
-        const payload = channelService.getBrandingForChannel(db, channelId);
+        const payload = brandingService.getBranding(db, channelService, channelRaw);
         return sendSuccess(res, payload, '操作成功');
     } catch (err) {
         logError('渠道 branding', err);
@@ -94,8 +32,8 @@ router.get('/branding', (req, res) => {
 
 router.get('/channel-theme-presets', (req, res) => {
     try {
-        const list = channelService.channelThemePresets.listChannelThemePresets();
-        return sendSuccess(res, { presets: list }, '操作成功');
+        const result = brandingService.listChannelThemePresets(channelService);
+        return sendSuccess(res, result, '操作成功');
     } catch (err) {
         logError('渠道主题预设', err);
         return sendError(res, convertDbError(err), err.message);
@@ -106,7 +44,7 @@ router.post('/user/channel-bind', authMiddleware, (req, res) => {
     try {
         const channelRaw = (req.body && (req.body.channel || req.body.channelId)) || '';
         const source = (req.body && req.body.source) || 'client';
-        const result = channelService.bindUserChannel(db, req.user.id, channelRaw, source);
+        const result = brandingService.bindUserChannel(db, channelService, req.user.id, channelRaw, source);
         return sendSuccess(res, result, '渠道已绑定');
     } catch (err) {
         if (err && err.code === 'CHANNEL_INVALID') {
@@ -120,19 +58,12 @@ router.post('/user/channel-bind', authMiddleware, (req, res) => {
 router.get('/promo/active', (req, res) => {
     const scene = req.query && req.query.scene ? String(req.query.scene) : '';
     const channelRaw = req.query && (req.query.channel || req.query.channelId);
-    const channelId = channelService.normalizeChannelId(channelRaw);
-    const list = getPromoCampaignsForScene(scene, channelId);
-    return sendSuccess(res, { list }, '操作成功');
+    const result = brandingService.getActivePromos(getPromoCampaignsForScene, channelService, scene, channelRaw);
+    return sendSuccess(res, result, '操作成功');
 });
 
-/** 运营弹窗埋点（可选，当前仅记日志） */
 router.post('/promo/event', (req, res) => {
-    const body = req.body || {};
-    if (body.promoId && body.action) {
-        logInfo('promo/event', `${body.promoId} ${body.action}`, {
-            scene: body.scene || ''
-        });
-    }
+    brandingService.recordPromoEvent(req.body || {});
     return sendSuccess(res, null, '操作成功');
 });
 

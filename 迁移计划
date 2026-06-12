@@ -183,24 +183,54 @@ app.use('/api/card', require('./routes/card'));
 - [ ] 无路由行为变更（小程序全流程冒烟通过）— **部署后请验证**
 - [ ] card 域集成测试 ≥ 3 条 — 待阶段 2
 
-### 阶段 2：P1 — 业务下沉 + 迁移版本化（2～3 周）
+### 阶段 2：P1 — 业务下沉 + 迁移版本化（2～3 周）✅ 2026-06-12
 
-| 任务 | 说明 |
+| 任务 | 状态 |
 |------|------|
-| `services/card-share-service.js` | 创建分享、resolveTemplate、sanitize 封面 |
-| `services/gift-inbox-service.js` | 收礼箱 CRUD |
-| `repositories/card-shares.js` | card_shares / card_gift_inbox SQL |
-| `utils/media-url.js` | 合并 `sanitizePlayerCoverUrlForClient`、`sanitizeCardShareImageForClient` |
-| `migrations/` | 新建 `schema_migrations` 表，把 `initDatabase` 中 ALTER 改为编号 SQL |
-| `scripts/migrate.js` | 启动时或部署前执行未跑迁移 |
+| `services/card-share-service.js` | ✅ |
+| `services/gift-inbox-service.js` | ✅ |
+| `repositories/card-shares.js` | ✅ |
+| `utils/media-url.js` | ✅ 已含 sanitizePlayerCover / sanitizeCardShare |
+| `migrations/002_additive_columns.js` | ✅ |
+| `bootstrap/run-migrations.js` + `scripts/migrate.js` | ✅ |
+| `tests/integration/card-share.test.js`（5 条） | ✅ |
 
 **initDatabase 拆分：**
 
 ```
 bootstrap/init-database.js
-  ├── runMigrations()      # 读 migrations/*.sql
-  └── ensureCoreTables()   # 仅 CREATE IF NOT EXISTS（逐步废弃内联 ALTER）
+  ├── runMigrations()      # 读 migrations/*.js|sql（建表后执行）
+  └── ensureCoreTables()   # CREATE IF NOT EXISTS（保留）
 ```
+
+**阶段 2 完成标准：**
+
+- [x] card 域 route → service → repository 分层
+- [x] 增量列迁移版本化（schema_migrations + baseline 既有库）
+- [x] card 集成测试 ≥ 3 条（实际 5 条，`npm run test:integration`）
+- [ ] 小程序主流程冒烟（部署后验证）
+
+### 阶段 2.5：域架构扩展（跳过 P0 music/user）✅ 2026-06-12
+
+| 优先级 | 域 | service / repository | 瘦路由 | 测试 |
+|--------|-----|---------------------|--------|------|
+| P0 | music / user | ✅ music-service、user-service + music-tracks/users repos | ✅ | ✅ music-user.test.js |
+| P1 | library / points / tasks | ✅ library-service、points-ledger、daily-tasks + repos | ✅ | ✅ library-points.test.js |
+| P2 | community / shop | ✅ community-service、shop-proxy | ✅ | — |
+| P3 | mall / mianjia / branding | ✅ catalog + branding service | ✅ | — |
+
+**app.js 改造：**
+
+- shop_token / callShopWithAutoRefresh → `services/shop-token-service.js`
+- recordPointsLedger / getOrInitPoints → `services/points-ledger-service.js`
+
+**阶段 2.5 完成标准：**
+
+- [x] P0～P3 域 route → service 分层（含 music 生成/轮询、user 登录/关注/注销）
+- [x] `points.js` 固定路径 `/config` 置于 `/:openid` 之前
+- [x] `mall.js` 修复 `getMallClientConfig` 未导入问题
+- [x] 集成测试扩展至 library + points + music + user（`npm run test:integration` 15 条）
+- [ ] 小程序主流程冒烟（部署后验证）
 
 ### 阶段 3：P2 — 质量与鉴权（按需）
 
@@ -264,7 +294,8 @@ bootstrap/init-database.js
 - [x] **Day 4**：迁移 `routes/media.js`（2026-06-12）
 - [x] **Day 5**：迁移其余全部路由 + 新 `app.js`（2026-06-12）
 - [ ] 宝塔部署 + 小程序冒烟
-- [ ] 阶段 2：集成测试 + service 下沉
+- [x] 阶段 2：service/repo + migrations + card 集成测试（2026-06-12）
+- [x] 阶段 2.5：library/points/tasks/shop/community/mall/mianjia/branding/music/user 下沉（2026-06-12）
 
 ---
 
@@ -302,13 +333,34 @@ bootstrap/init-database.js
 
 | 文件 | 行数 | 说明 |
 |------|------|------|
-| `src/app.js` | 295 | 新入口（启动 + context + 注册） |
+| `src/app.js` | ~300 | 新入口（启动 + context + 注册） |
 | `src/app.legacy.js` | 5331 | 原文件备份 |
-| `src/bootstrap/*` | ~500 | env / database / init-database |
+| `src/bootstrap/*` | ~550 | env / database / init-database / run-migrations |
 | `src/middleware/auth.js` | 32 | 鉴权 |
+| `src/services/card-share-service.js` | ~200 | 贺卡分享业务 |
+| `src/services/gift-inbox-service.js` | ~70 | 收礼箱业务 |
+| `src/services/library-service.js` | ~190 | 播放记录 / 收藏 / 通知 |
+| `src/services/points-ledger-service.js` | ~130 | 积分账户与明细 |
+| `src/services/daily-tasks-service.js` | ~150 | 每日任务 |
+| `src/services/shop-proxy-service.js` | ~110 | 星鹿商城代理 |
+| `src/services/community-service.js` | ~960 | 社群整域 |
+| `src/repositories/card-shares.js` | ~110 | card SQL |
+| `src/repositories/library.js` | ~120 | library SQL |
+| `src/repositories/points.js` | ~100 | points SQL |
 | `src/utils/*` | ~660 | app-context / media-url / upload / content-guard |
-| `src/routes/*.js` | ~4500 | 17 个路由模块 + index.js |
+| `src/routes/card.js` | ~280 | 瘦路由（调 service） |
+| `src/routes/library.js` | ~150 | 瘦路由 |
+| `src/routes/points.js` | ~100 | 瘦路由（/config 优先） |
+| `src/routes/community.js` | 2 | 转发 community-service |
+| `src/services/music-service.js` | ~430 | 创作/生成/曲库/作品 CRUD |
+| `src/services/user-service.js` | ~320 | 登录/资料/关注/注销 |
+| `src/repositories/music-tracks.js` | ~180 | music SQL |
+| `src/repositories/users.js` | ~200 | user/follow SQL |
+| `src/routes/music.js` | ~170 | 瘦路由 |
+| `src/routes/user.js` | ~130 | 瘦路由 |
+| `tests/integration/*.test.js` | 15 cases | `npm run test:integration` |
 
-启动：`npm run dev` 或 `node src/app.js`
+启动：`npm run dev` 或 `node src/app.js`  
+迁移：`npm run migrate`
 
 ---

@@ -6,7 +6,9 @@
   "scripts": {
     "start": "cross-env NODE_ENV=production node src/app.js",
     "dev": "cross-env NODE_ENV=development nodemon src/app.js",
-    "test": "cross-env NODE_ENV=test node src/app.js",
+    "test": "cross-env NODE_ENV=test node --test tests/integration/*.test.js",
+    "test:integration": "cross-env NODE_ENV=test node --test tests/integration/*.test.js",
+    "migrate": "node scripts/migrate.js",
     "sync:cards": "node scripts/sync-card-templates.js",
     "build": "tsc"
   },
