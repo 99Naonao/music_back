@@ -60,6 +60,20 @@ function countFollowing(userId) {
     return getDb().prepare('SELECT COUNT(*) as c FROM user_follows WHERE follower_id = ?').get(userId).c;
 }
 
+function getFollowStatsCombined(userId) {
+    const row = getDb()
+        .prepare(
+            `SELECT
+                (SELECT COUNT(*) FROM user_follows WHERE follower_id = ?) AS followCount,
+                (SELECT COUNT(*) FROM user_follows WHERE following_id = ?) AS fansCount`
+        )
+        .get(userId, userId);
+    return {
+        followCount: row ? row.followCount || 0 : 0,
+        fansCount: row ? row.fansCount || 0 : 0
+    };
+}
+
 function listFollowers(userId, limit, offset) {
     return getDb()
         .prepare(
@@ -206,6 +220,7 @@ module.exports = {
     updateProfile,
     countFollowers,
     countFollowing,
+    getFollowStatsCombined,
     listFollowers,
     countFollowersTotal,
     listFollowing,

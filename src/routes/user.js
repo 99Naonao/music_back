@@ -41,6 +41,16 @@ router.get('/follow/stats', authMiddleware, (req, res) => {
     }
 });
 
+router.get('/mine-summary', authMiddleware, (req, res) => {
+    try {
+        const result = userService.getMineSummary(req.user.id);
+        sendSuccess(res, result.data);
+    } catch (err) {
+        logError('我的页聚合统计', err, { userId: req.user.id });
+        sendError(res, ErrorCode.DB_QUERY_ERROR, err.message);
+    }
+});
+
 router.get('/follow/list', authMiddleware, (req, res) => {
     try {
         const result = userService.getFollowList(req.user.id, req.query);

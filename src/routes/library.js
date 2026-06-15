@@ -134,8 +134,9 @@ router.get('/notifications', authMiddleware, (req, res) => {
 router.put('/notifications/read-all', authMiddleware, (req, res) => {
     const userId = req.user.id;
     try {
-        libraryService.markAllNotificationsRead(userId);
-        sendSuccess(res, null, '全部标记为已读');
+        const result = libraryService.markAllNotificationsRead(userId);
+        sendSuccess(res, result.data, '全部标记为已读');
+        logInfo('通知', '全部已读', { userId, unreadCount: result.data.unreadCount });
     } catch (err) {
         logError('标记全部已读', err, { userId });
         sendError(res, ErrorCode.DB_QUERY_ERROR, err.message);
@@ -150,7 +151,8 @@ router.put('/notifications/:id/read', authMiddleware, (req, res) => {
         if (!result.ok) {
             return sendError(res, result.error, result.message);
         }
-        sendSuccess(res, null, '已标记为已读');
+        sendSuccess(res, result.data, '已标记为已读');
+        logInfo('通知', '单条已读', { userId, notifId: id, unreadCount: result.data.unreadCount });
     } catch (err) {
         logError('标记通知已读', err, { notifId: id, userId });
         sendError(res, ErrorCode.DB_QUERY_ERROR, err.message);

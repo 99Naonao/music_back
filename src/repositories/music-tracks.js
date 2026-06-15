@@ -76,6 +76,19 @@ function findInternalUserIdByOpenid(openid) {
     return row ? row.id : null;
 }
 
+function countCompletedByUserId(userId) {
+    const row = getDb()
+        .prepare(
+            `SELECT COUNT(*) AS c FROM music_tracks
+             WHERE user_id = ?
+               AND status = 'completed'
+               AND audio_url IS NOT NULL
+               AND TRIM(audio_url) != ''`
+        )
+        .get(userId);
+    return row ? row.c : 0;
+}
+
 function listCompletedByUserId(userId, limit = 50) {
     return getDb()
         .prepare(
@@ -197,6 +210,7 @@ module.exports = {
     insertSoundEffect,
     listSoundEffects,
     findInternalUserIdByOpenid,
+    countCompletedByUserId,
     listCompletedByUserId,
     updateAudioUrl,
     completeTrack,

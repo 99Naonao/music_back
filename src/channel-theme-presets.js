@@ -209,7 +209,8 @@ const CHANNEL_THEME_PRESETS = {
         tabSelected: '#FFFFFF',
         tabColor: '#C8C8C8',
         tabBg: '#1A1A2E',
-        windowBg: '#202B48'
+        windowBg: '#202B48',
+        pageBgBottom: '#1a2238'
     }
 };
 
@@ -268,13 +269,21 @@ function normalizeChannelPresetId(raw) {
     return DEFAULT_PRESET_ID;
 }
 
+function enrichPreset(preset) {
+    if (!preset) return preset;
+    if (preset.pageBgBottom) return preset;
+    return Object.assign({}, preset, {
+        pageBgBottom: preset.variant === 'night' ? preset.windowBg : '#ffffff'
+    });
+}
+
 function getChannelThemePreset(presetId) {
-    return CHANNEL_THEME_PRESETS[normalizeChannelPresetId(presetId)];
+    return enrichPreset(CHANNEL_THEME_PRESETS[normalizeChannelPresetId(presetId)]);
 }
 
 function mapPresetList(ids) {
     return ids.map((id) => {
-        const p = CHANNEL_THEME_PRESETS[id];
+        const p = enrichPreset(CHANNEL_THEME_PRESETS[id]);
         return {
             id: p.id,
             name: p.name,
@@ -286,7 +295,8 @@ function mapPresetList(ids) {
             tabSelected: p.tabSelected,
             tabColor: p.tabColor,
             tabBg: p.tabBg,
-            windowBg: p.windowBg
+            windowBg: p.windowBg,
+            pageBgBottom: p.pageBgBottom
         };
     });
 }
@@ -320,7 +330,8 @@ function resolveThemeFromPreset(presetId, rowTheme) {
         tabSelected: pick('tabSelected', 'tab_selected'),
         tabColor: pick('tabColor', 'tab_color'),
         tabBg: pick('tabBg', 'tab_bg'),
-        windowBg: pick('windowBg', 'window_bg')
+        windowBg: pick('windowBg', 'window_bg'),
+        pageBgBottom: pick('pageBgBottom', 'page_bg_bottom') || preset.pageBgBottom
     };
 }
 

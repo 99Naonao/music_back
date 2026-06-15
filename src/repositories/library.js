@@ -75,6 +75,19 @@ function countFavorites(userId) {
     return row ? row.c : 0;
 }
 
+function getCommunityPostStats(userId) {
+    const row = getDb()
+        .prepare(
+            `SELECT COUNT(*) AS postsCount, COALESCE(SUM(likes), 0) AS totalLikesReceived
+             FROM community_posts WHERE user_id = ?`
+        )
+        .get(userId);
+    return {
+        postsCount: row ? row.postsCount || 0 : 0,
+        totalLikesReceived: row ? row.totalLikesReceived || 0 : 0
+    };
+}
+
 function listFavorites(userId, limit) {
     return getDb()
         .prepare(
@@ -146,6 +159,7 @@ module.exports = {
     listPlayHistory,
     clearPlayHistory,
     countFavorites,
+    getCommunityPostStats,
     listFavorites,
     findTrackId,
     addFavorite,

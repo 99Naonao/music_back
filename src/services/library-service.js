@@ -169,12 +169,14 @@ function markNotificationRead(userId, id) {
     if (result.changes === 0) {
         return { ok: false, error: ErrorCode.NOT_FOUND, message: '通知不存在' };
     }
-    return { ok: true, data: null };
+    const unreadCount = libraryRepo.countUnreadNotifications(userId);
+    return { ok: true, data: { unreadCount } };
 }
 
 function markAllNotificationsRead(userId) {
     libraryRepo.markAllNotificationsRead(userId);
-    return { ok: true, data: null };
+    const unreadCount = libraryRepo.countUnreadNotifications(userId);
+    return { ok: true, data: { unreadCount } };
 }
 
 module.exports = {

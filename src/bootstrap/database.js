@@ -23,6 +23,12 @@ function getDbPath() {
 function initDatabaseConnection() {
     if (!db) {
         db = new Database(getDbPath());
+        try {
+            db.pragma('journal_mode = WAL');
+            db.pragma('busy_timeout = 5000');
+        } catch (e) {
+            console.warn('[DB] WAL/busy_timeout 设置失败:', e.message);
+        }
     }
     return db;
 }

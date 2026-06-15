@@ -22,8 +22,11 @@ const DAILY_TASK_LABELS = { sign_in: '每日签到', create_music: '创作音乐
 
 function getDailyTasks(userId) {
     const claimDate = cnTodayDate();
-    const rows = pointsRepo.listDailyClaimsForDate(userId, claimDate);
-    const done = new Set(rows.map((r) => r.task_key));
+    const done = new Set();
+    if (userId) {
+        const rows = pointsRepo.listDailyClaimsForDate(userId, claimDate);
+        rows.forEach((r) => done.add(r.task_key));
+    }
     const tasks = [
         {
             taskKey: 'sign_in',

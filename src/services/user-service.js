@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const usersRepo = require('../repositories/users');
+const musicTracksRepo = require('../repositories/music-tracks');
+const libraryRepo = require('../repositories/library');
 const channelService = require('../channel-service');
 const shopApi = require('../xinglu-shop-api');
 const wxMiniApps = require('../wx-mini-apps');
@@ -195,6 +197,24 @@ function getFollowStats(userId) {
     return { ok: true, data: { followCount, fansCount } };
 }
 
+/** 「我的」页聚合统计（替代 5～6 次分散 GET） */
+function getMineSummary(userId) {
+    const { followCount, fansCount } = usersRepo.getFollowStatsCombined(userId);
+    const { postsCount, totalLikesReceived } = libraryRepo.getCommunityPostStats(userId);
+    return {
+        ok: true,
+        data: {
+            worksCount: musicTracksRepo.countCompletedByUserId(userId),
+            postsCount,
+            totalLikesReceived,
+            followCount,
+            fansCount,
+            favoritesCount: libraryRepo.countFavorites(userId),
+            unreadCount: libraryRepo.countUnreadNotifications(userId)
+        }
+    };
+}
+
 function getFollowList(userId, query) {
     const type = String((query && query.type) || 'following').toLowerCase();
     const pageNum = Math.max(1, parseInt(query && query.page, 10) || 1);
@@ -350,6 +370,7 @@ function deleteAccount(userId) {
 module.exports = {
     login,
     getFollowStats,
+    getMineSummary,
     getFollowList,
     getFollowStatus,
     followUser,

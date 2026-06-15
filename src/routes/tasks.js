@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const ctx = require('../utils/app-context');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, optionalAuthMiddleware } = require('../middleware/auth');
 const dailyTasks = require('../services/daily-tasks-service');
 
 const {
@@ -17,9 +17,10 @@ const {
     callShopWithAutoRefresh
 } = ctx;
 
-router.get('/daily', authMiddleware, (req, res) => {
+router.get('/daily', optionalAuthMiddleware, (req, res) => {
     try {
-        const result = dailyTasks.getDailyTasks(req.user.id);
+        const userId = req.user && req.user.id ? req.user.id : null;
+        const result = dailyTasks.getDailyTasks(userId);
         sendSuccess(res, result.data);
     } catch (err) {
         logError('每日任务状态', err);
