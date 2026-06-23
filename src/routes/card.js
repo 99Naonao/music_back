@@ -5,8 +5,9 @@ const express = require('express');
 const router = express.Router();
 const ctx = require('../utils/app-context');
 const { authMiddleware } = require('../middleware/auth');
-const giftInboxService = require('../services/gift-inbox-service');
+const channelService = require('../channel-service');
 const cardShareService = require('../services/card-share-service');
+const giftInboxService = require('../services/gift-inbox-service');
 
 const {
     getDb,
@@ -281,10 +282,19 @@ router.post('/create', async (req, res) => {
     const cardId = uuidv4();
     const shareUrl = `${req.protocol}://${req.get('host')}/card/${cardId}`;
 
+    let sourceChannel = null;
+    const senderRow =
+        senderId &&
+        db.prepare('SELECT id FROM users WHERE id = ? OR wx_openid = ?').get(senderId, senderId);
+    sourceChannel = channelService.resolveSourceChannel(db, {
+        headers: req.headers,
+        user: senderRow || undefined
+    });
+
     try {
         db.prepare(
-            `INSERT INTO greeting_cards (id, music_id, sender_id, recipient_name, message, template_style, share_url)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO greeting_cards (id, music_id, sender_id, recipient_name, message, template_style, share_url, source_channel)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         ).run(
             cardId,
             musicId,
@@ -292,7 +302,8 @@ router.post('/create', async (req, res) => {
             recipientName,
             message || '',
             templateStyle || 'default',
-            shareUrl
+            shareUrl,
+            sourceChannel
         );
 
         sendSuccess(res, { cardId, shareUrl }, '贺卡创建成功');

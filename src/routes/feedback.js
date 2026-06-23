@@ -138,13 +138,14 @@ router.post('', optionalAuthMiddleware, async (req, res) => {
     }
 });
 
-/** 管理端查看反馈列表（需配置 FEEDBACK_ADMIN_SECRET，请求带 ?secret=） */
+/** 管理端查看反馈列表（deprecated：请用 /api/admin/feedback + Session） */
 router.get('', (req, res) => {
     const secret = String(process.env.FEEDBACK_ADMIN_SECRET || '').trim();
     const given = String(req.query.secret || '').trim();
     if (!secret || given !== secret) {
         return sendError(res, ErrorCode.FORBIDDEN, '无权查看反馈列表');
     }
+    logWarn('意见反馈', 'secret 接口已弃用，请迁移至 /api/admin/feedback');
 
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));

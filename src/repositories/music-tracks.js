@@ -156,7 +156,8 @@ function listSystemLibrary(category, page, limit) {
     let sql = `SELECT id, title, description, main_instrument as instrument, frequency, bpm, duration,
             audio_duration_ms, audio_url, player_cover_url, COALESCE(play_count, 0) AS play_count, created_at
          FROM music_tracks
-         WHERE user_id = 'system' AND status = 'completed'`;
+         WHERE user_id = 'system' AND status = 'completed'
+           AND COALESCE(library_enabled, 1) != 0`;
     const params = [];
 
     if (category && category !== '全部') {
@@ -170,7 +171,7 @@ function listSystemLibrary(category, page, limit) {
         params.push(like, like, like, like);
     }
 
-    sql += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+    sql += ` ORDER BY COALESCE(library_sort_order, 0) DESC, created_at DESC LIMIT ? OFFSET ?`;
     params.push(limit, (page - 1) * limit);
 
     const tracks = db.prepare(sql).all(...params);

@@ -1,35 +1,176 @@
-# 乐伴好眠 — 上传封面 404 修复（宝塔 / Nginx）
+# 乐伴好眠 · music.zsyl.cc 宝塔 Nginx 完整示例
 #
-# 现象：POST /api/upload/image 成功，但浏览器打开
-#   https://域名/api/music/cover/xxx.png  → 404.html
-# 原因：站点常有一条「按后缀匹配静态图」的规则，*.png 不会反代到 Node。
+# 用法：宝塔 → 网站 → music.zsyl.cc → 配置文件
+#       在保留 SSL / 证书 / 日志等宝塔段落的前提下，对照下方 location 块合并。
 #
-# 方案 A（推荐，代码已支持）：封面 URL 使用查询参数，路径无 .png 后缀
-#   https://music.zsyl.cc/api/music/cover?f=image-xxx.png
-# 部署新版 Node 后无需改 Nginx。
-#
-# 方案 B：在「伪静态 / 配置文件」里，让 /api/ 优先于静态图规则，例如：
-#
-# location ^~ /api/ {
-#     proxy_pass http://127.0.0.1:3000;
-#     proxy_http_version 1.1;
-#     proxy_set_header Host $host;
-#     proxy_set_header X-Real-IP $remote_addr;
-#     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-#     proxy_set_header X-Forwarded-Proto $scheme;
-# }
-#
-# 方案 C：上传目录静态别名（.env 设 UPLOAD_PUBLIC_PATH=uploads）
-# location ^~ /uploads/ {
-#     alias /www/wwwroot/music_sleep_api/data/uploads/;
-#     expires 30d;
-# }
-#
-# 作品音频落盘目录（生成后自动下载）：
-#   {UPLOAD_DIR}/music-audio/audio-{作品ID}.mp3
-# 对外地址（推荐，无 .mp3 路径后缀）：
-#   https://music.zsyl.cc/api/music/audio?f=audio-{作品ID}.mp3
-#
-# 官方曲库（data/audio/library/track1.mp3）：
-#   https://music.zsyl.cc/api/music/library-audio?f=track1.mp3
-# 勿用 /audio/library/track1.mp3（易被 Nginx *.mp3 静态规则 404）
+# 要点：
+#   · /admin/     运营后台静态页（同域，不单独子域名）
+#   · /api/       小程序 + Admin API 反代 Node（须优先于 *.png 等静态规则）
+#   · /uploads/   可选静态别名（若 .env 用 UPLOAD_PUBLIC_PATH=uploads）
+#   · 封面 URL 推荐 /api/music/cover?f=xxx（路径无 .png 后缀，避免被下方图片规则拦截）
+
+server
+{
+    listen 80;
+    listen 443 ssl;
+    listen 443 quic;
+    http2 on;
+    server_name music.zsyl.cc;
+    index index.php index.html index.htm default.php default.htm default.html;
+    root /www/wwwroot/music_sleep_api;
+    #CERT-APPLY-CHECK--START
+    # 用于SSL证书申请时的文件验证相关配置 -- 请勿删除
+    include /www/server/panel/vhost/nginx/well-known/music.zsyl.cc.conf;
+    #CERT-APPLY-CHECK--END
+    include /www/server/panel/vhost/nginx/extension/music.zsyl.cc/*.conf;
+
+    #SSL-START SSL相关配置，请勿删除或修改下一行带注释的404规则
+    #error_page 404/404.html;
+    #HTTP_TO_HTTPS_START
+    set $isRedcert 1;
+    if ($server_port != 443) {
+        set $isRedcert 2;
+    }
+    if ( $uri ~ /\.well-known/ ) {
+        set $isRedcert 1;
+    }
+    if ($isRedcert != 1) {
+        rewrite ^(/.*)$ https://$host$1 permanent;
+    }
+    #HTTP_TO_HTTPS_END
+    ssl_certificate    /www/server/panel/vhost/cert/music.zsyl.cc/fullchain.pem;
+    ssl_certificate_key    /www/server/panel/vhost/cert/music.zsyl.cc/privkey.pem;
+    ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;
+    ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_tickets on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    add_header Strict-Transport-Security "max-age=31536000";
+    add_header Alt-Svc 'quic=":443"; h3=":443"; h3-29=":443"; h3-27=":443";h3-25=":443"; h3-T050=":443"; h3-Q050=":443";h3-Q049=":443";h3-Q048=":443"; h3-Q046=":443"; h3-Q043=":443"';
+    error_page 497  https://$host$request_uri;
+
+    #SSL-END
+
+    #ERROR-PAGE-START  错误页配置，可以注释、删除或修改
+    error_page 404 /404.html;
+    #error_page 502 /502.html;
+    #ERROR-PAGE-END
+
+    #PHP-INFO-START  PHP引用配置，可以注释或修改
+    #include enable-php-80.conf;
+    #PHP-INFO-END
+
+    #REWRITE-START URL重写规则引用,修改后将导致面板设置的伪静态规则失效
+    #include /www/server/panel/vhost/rewrite/music.zsyl.cc.conf;
+    #REWRITE-END
+
+    # 文件上传大小限制（根据需要调整）
+    client_max_body_size 50M;
+
+    # ---------- 运营后台（Step 1+）----------
+    # 页面：https://music.zsyl.cc/admin/
+    # 接口：https://music.zsyl.cc/api/admin/* （走下方 /api/ 反代，Cookie: admin_sid）
+    # Step 2 起可将 deploy/admin/ 换为 admin-web/dist 构建产物目录
+    location = /admin {
+        return 301 /admin/;
+    }
+    location ^~ /admin/ {
+        root /www/wwwroot/music_sleep_api/deploy;
+        index index.html;
+        try_files $uri $uri/ /admin/index.html;
+        expires 1h;
+        add_header Cache-Control "public";
+    }
+
+    # ---------- API：须放在 location / 与 *.png 静态规则之前 ----------
+    location ^~ /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 180s;
+    }
+
+    # 其余请求仍反代 Node（健康检查、旧路径等）
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 180s;
+    }
+
+    # 静态文件直接由 Nginx 处理（若使用 UPLOAD_PUBLIC_PATH=uploads）
+    # 若实际上传目录为 data/uploads，请改为：
+    #   alias /www/wwwroot/music_sleep_api/data/uploads/;
+    location ^~ /uploads/ {
+        alias /www/wwwroot/music_sleep_api/uploads/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    #禁止访问的文件或目录
+    location ~ ^/(\.user.ini|\.htaccess|\.git|\.env|\.svn|\.project|LICENSE|README.md)
+    {
+        return 404;
+    }
+
+    #一键申请SSL证书验证目录相关设置
+    location ~ \.well-known{
+        allow all;
+    }
+
+    #禁止在证书验证目录放入敏感文件
+    if ( $uri ~ "^/\.well-known/.*\.(php|jsp|py|js|css|lua|ts|go|zip|tar\.gz|rar|7z|sql|bak)$" ) {
+        return 403;
+    }
+
+    # 站点根目录静态图（勿匹配 /api/ 下带 .png 的 URL，故 /api/ 已用 ^~ 提前截获）
+    location ~ .*\.(gif|jpg|jpeg|png|bmp|swf)$
+    {
+        expires      30d;
+        error_log /dev/null;
+        access_log /dev/null;
+    }
+
+    location ~ .*\.(js|css)?$
+    {
+        expires      12h;
+        error_log /dev/null;
+        access_log /dev/null;
+    }
+
+    # 安全头设置
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    access_log  /www/wwwlogs/music.zsyl.cc.log;
+    error_log  /www/wwwlogs/music.zsyl.cc.error.log;
+}
+
+# Admin 首次部署（backend 目录执行）：
+#   node scripts/migrate.js
+#   node scripts/seed-admin.js --username admin --password '强密码'
+#   重启 Node → 宝塔重载 Nginx
+# 验证：
+#   https://music.zsyl.cc/admin/
+#   POST https://music.zsyl.cc/api/admin/auth/login

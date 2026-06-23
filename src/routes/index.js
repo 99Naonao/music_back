@@ -21,6 +21,7 @@ function registerAllRoutes(app) {
     app.use('/api/tasks', require('./tasks'));
     app.use('/api/points', require('./points'));
     app.use('/api/wechat', require('./wechat'));
+    app.use('/api/admin', require('../admin'));
 }
 
 module.exports = { registerAllRoutes };

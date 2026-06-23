@@ -1,0 +1,14 @@
+{
+  "id": "53ebbace-22ae-47d5-9f38-46db704c7a06",
+  "status": "done",
+  "type": "channel_stats",
+  "format": "xlsx",
+  "from": "2026-06-16",
+  "to": "2026-06-22",
+  "channelId": "all",
+  "rowCount": 1,
+  "filename": "export_channel_stats_2026-06-16_2026-06-22_53ebbace.xlsx",
+  "filePath": "D:\\中数\\backProject\\backend\\data\\exports\\export_channel_stats_2026-06-16_2026-06-22_53ebbace.xlsx",
+  "createdAt": "2026-06-22T07:35:12.540Z",
+  "createdBy": "batch_b_admin"
+}

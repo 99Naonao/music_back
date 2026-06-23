@@ -12,7 +12,7 @@ const { sendError, sendSuccess, ErrorCode, logError, logInfo, convertDbError } =
 router.post('/play-history', authMiddleware, (req, res) => {
     const userId = req.user.id;
     try {
-        const result = libraryService.recordPlayHistory(userId, req.body);
+        const result = libraryService.recordPlayHistory(userId, req.body, req);
         if (!result.ok) {
             return sendError(res, result.error, result.message);
         }

@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const ctx = require('../utils/app-context');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, optionalAuthMiddleware } = require('../middleware/auth');
 const brandingService = require('../services/branding-service');
 
 const {
@@ -62,9 +62,35 @@ router.get('/promo/active', (req, res) => {
     return sendSuccess(res, result, '操作成功');
 });
 
+router.get('/home/banners', (req, res) => {
+    try {
+        const adminContentService = require('../services/admin-content-service');
+        const channelRaw = req.query && (req.query.channel || req.query.channelId);
+        const result = adminContentService.getActiveBannersForChannel(db, channelRaw);
+        return sendSuccess(res, result, '操作成功');
+    } catch (err) {
+        logError('首页 Banner', err);
+        return sendError(res, convertDbError(err), err.message);
+    }
+});
+
 router.post('/promo/event', (req, res) => {
-    brandingService.recordPromoEvent(req.body || {});
+    brandingService.recordPromoEvent(db, req.body || {});
     return sendSuccess(res, null, '操作成功');
+});
+
+/** 小程序冷启动 DAU 埋点（可选登录；需 visitorKey 或登录用户） */
+router.post('/event/launch', optionalAuthMiddleware, (req, res) => {
+    try {
+        const result = brandingService.recordAppLaunch(db, req, req.body || {});
+        if (!result.ok) {
+            return sendError(res, ErrorCode.MISSING_REQUIRED_PARAM, '缺少 visitorKey');
+        }
+        return sendSuccess(res, { channelId: result.channelId, statDate: result.statDate }, '已记录');
+    } catch (err) {
+        logError('启动埋点', err);
+        return sendError(res, convertDbError(err), err.message);
+    }
 });
 
 module.exports = router;

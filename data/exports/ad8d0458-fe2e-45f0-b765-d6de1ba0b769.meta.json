@@ -1,0 +1,14 @@
+{
+  "id": "ad8d0458-fe2e-45f0-b765-d6de1ba0b769",
+  "status": "done",
+  "type": "feedback",
+  "format": "csv",
+  "from": "2020-01-01",
+  "to": "2099-12-31",
+  "channelId": "all",
+  "rowCount": 1,
+  "filename": "export_feedback_2020-01-01_2099-12-31_ad8d0458.csv",
+  "filePath": "D:\\中数\\backProject\\backend\\data\\exports\\export_feedback_2020-01-01_2099-12-31_ad8d0458.csv",
+  "createdAt": "2026-06-22T07:35:12.352Z",
+  "createdBy": "step4_admin"
+}

@@ -237,7 +237,7 @@ function bindUserChannel(db, userId, channelIdRaw, source) {
     const channelId = normalizeChannelId(channelIdRaw);
     if (channelId === DEFAULT_CHANNEL_ID) {
         db.prepare('DELETE FROM user_channel_bindings WHERE user_id = ?').run(userId);
-        return { channelId: DEFAULT_CHANNEL_ID, cleared: true };
+        return { channelId: DEFAULT_CHANNEL_ID, cleared: true, isNewBinding: false };
     }
     const ch = db.prepare('SELECT id, status FROM channels WHERE id = ?').get(channelId);
     if (!ch || ch.status !== 'active') {
@@ -245,6 +245,8 @@ function bindUserChannel(db, userId, channelIdRaw, source) {
         err.code = 'CHANNEL_INVALID';
         throw err;
     }
+    const prev = getUserChannelId(db, userId);
+    const isNewBinding = !prev;
     db.prepare(
         `INSERT INTO user_channel_bindings (user_id, channel_id, source, bound_at)
          VALUES (?, ?, ?, datetime('now', 'localtime'))
@@ -253,7 +255,7 @@ function bindUserChannel(db, userId, channelIdRaw, source) {
            source = excluded.source,
            bound_at = datetime('now', 'localtime')`
     ).run(userId, channelId, source || 'client');
-    return { channelId, cleared: false };
+    return { channelId, cleared: false, isNewBinding, channelChanged: prev !== channelId };
 }
 
 function resolveSourceChannel(db, req) {

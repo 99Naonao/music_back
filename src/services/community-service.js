@@ -902,6 +902,7 @@ router.get('/admin/posts', (req, res) => {
     if (!isCommunityAdminRequest(req)) {
         return sendError(res, ErrorCode.FORBIDDEN, '无权操作');
     }
+    logWarn('社区管理', 'secret 接口已弃用，请迁移至 /api/admin/community/posts');
 
     const q = String(req.query.q || req.query.keyword || '').trim();
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
@@ -938,11 +939,12 @@ router.get('/admin/posts', (req, res) => {
     }
 });
 
-/** 管理端：删除任意帖子（?secret=） */
+/** 管理端：删除任意帖子（deprecated：请用 DELETE /api/admin/community/posts/:id） */
 router.delete('/admin/post/:id', (req, res) => {
     if (!isCommunityAdminRequest(req)) {
         return sendError(res, ErrorCode.FORBIDDEN, '无权操作');
     }
+    logWarn('社区管理', 'secret 删帖接口已弃用，请迁移至 /api/admin/community/posts/:id');
 
     const { id } = req.params;
     if (!id) {

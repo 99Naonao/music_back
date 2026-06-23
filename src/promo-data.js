@@ -127,30 +127,40 @@ const ACTIVE_CAMPAIGNS = [
 ];
 
 /**
+ * @param {object[]} list
  * @param {string} [scene]
- * @param {string} [channelId] 当前渠道；campaign.channelIds 为空表示全渠道
+ * @param {string} [channelId]
  */
-function getPromoCampaignsForScene(scene, channelId) {
-    let list = ACTIVE_CAMPAIGNS.filter((c) => c.enabled !== false);
+function filterPromoCampaigns(list, scene, channelId) {
+    let filtered = (list || []).filter((c) => c.enabled !== false);
     const ch = channelId != null ? String(channelId).trim() : '';
     if (ch && ch !== 'default') {
-        list = list.filter((c) => {
+        filtered = filtered.filter((c) => {
             const allow = c.channelIds;
             if (!allow || !Array.isArray(allow) || allow.length === 0) return true;
             return allow.includes(ch);
         });
-        list = list.filter((c) => {
+        filtered = filtered.filter((c) => {
             const deny = c.channelDeny;
             if (!deny || !Array.isArray(deny) || deny.length === 0) return true;
             return !deny.includes(ch);
         });
     }
-    if (!scene) return list;
-    return list.filter((c) => Array.isArray(c.scenes) && c.scenes.includes(scene));
+    if (!scene) return filtered;
+    return filtered.filter((c) => Array.isArray(c.scenes) && c.scenes.includes(scene));
+}
+
+/**
+ * @param {string} [scene]
+ * @param {string} [channelId] 当前渠道；campaign.channelIds 为空表示全渠道
+ */
+function getPromoCampaignsForScene(scene, channelId) {
+    return require('./services/promo-campaign-service').getPromoCampaignsForScene(scene, channelId);
 }
 
 module.exports = {
     PROMO_INACTIVE_DAYS,
     ACTIVE_CAMPAIGNS,
+    filterPromoCampaigns,
     getPromoCampaignsForScene
 };

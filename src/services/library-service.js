@@ -1,4 +1,5 @@
 const libraryRepo = require('../repositories/library');
+const channelService = require('../channel-service');
 const { sanitizePlayerCoverUrlForClient } = require('../utils/media-url');
 const { incrementMusicPlayCount } = require('../utils/music-play-count');
 const { ErrorCode } = require('../error-codes');
@@ -48,7 +49,7 @@ function mapFavoriteTrackRow(row) {
     };
 }
 
-function recordPlayHistory(userId, body) {
+function recordPlayHistory(userId, body, req) {
     const {
         musicId,
         id,
@@ -71,6 +72,9 @@ function recordPlayHistory(userId, body) {
         return { ok: false, error: ErrorCode.MISSING_REQUIRED_PARAM, message: 'audioUrl不能为空' };
     }
 
+    const { getDb } = require('../bootstrap/database');
+    const sourceChannel = req ? channelService.resolveSourceChannel(getDb(), req) : null;
+
     libraryRepo.upsertPlayHistory(
         userId,
         {
@@ -81,7 +85,8 @@ function recordPlayHistory(userId, body) {
             instrument: instrument ? String(instrument).slice(0, 64) : '',
             frequency: frequency ? String(frequency).slice(0, 64) : '',
             durationSec: Math.max(0, parseInt(durationSec, 10) || 0),
-            source: source ? String(source).slice(0, 32) : 'app'
+            source: source ? String(source).slice(0, 32) : 'app',
+            sourceChannel
         },
         parsePlayedAtForDb(playedAt)
     );

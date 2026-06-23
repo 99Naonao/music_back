@@ -1,0 +1,14 @@
+{
+  "id": "adcea400-77f4-48f1-8444-77ab33ef1f9c",
+  "status": "done",
+  "type": "channel_stats",
+  "format": "xlsx",
+  "from": "2026-06-16",
+  "to": "2026-06-22",
+  "channelId": "all",
+  "rowCount": 1,
+  "filename": "export_channel_stats_2026-06-16_2026-06-22_adcea400.xlsx",
+  "filePath": "D:\\中数\\backProject\\backend\\data\\exports\\export_channel_stats_2026-06-16_2026-06-22_adcea400.xlsx",
+  "createdAt": "2026-06-22T07:52:33.955Z",
+  "createdBy": "batch_b_admin"
+}

@@ -2,10 +2,11 @@ const { getDb } = require('../bootstrap/database');
 
 function upsertPlayHistory(userId, payload, playedAtDb) {
     const db = getDb();
+    const sourceChannel = payload.sourceChannel || null;
     if (playedAtDb) {
         db.prepare(`
-            INSERT INTO play_history (user_id, music_id, title, audio_url, cover, instrument, frequency, duration_sec, source, played_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO play_history (user_id, music_id, title, audio_url, cover, instrument, frequency, duration_sec, source, source_channel, played_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, music_id) DO UPDATE SET
                 title = excluded.title,
                 audio_url = excluded.audio_url,
@@ -14,6 +15,7 @@ function upsertPlayHistory(userId, payload, playedAtDb) {
                 frequency = excluded.frequency,
                 duration_sec = excluded.duration_sec,
                 source = excluded.source,
+                source_channel = excluded.source_channel,
                 played_at = excluded.played_at
         `).run(
             userId,
@@ -25,12 +27,13 @@ function upsertPlayHistory(userId, payload, playedAtDb) {
             payload.frequency,
             payload.durationSec,
             payload.source,
+            sourceChannel,
             playedAtDb
         );
     } else {
         db.prepare(`
-            INSERT INTO play_history (user_id, music_id, title, audio_url, cover, instrument, frequency, duration_sec, source, played_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+            INSERT INTO play_history (user_id, music_id, title, audio_url, cover, instrument, frequency, duration_sec, source, source_channel, played_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
             ON CONFLICT(user_id, music_id) DO UPDATE SET
                 title = excluded.title,
                 audio_url = excluded.audio_url,
@@ -39,6 +42,7 @@ function upsertPlayHistory(userId, payload, playedAtDb) {
                 frequency = excluded.frequency,
                 duration_sec = excluded.duration_sec,
                 source = excluded.source,
+                source_channel = excluded.source_channel,
                 played_at = datetime('now', 'localtime')
         `).run(
             userId,
@@ -49,7 +53,8 @@ function upsertPlayHistory(userId, payload, playedAtDb) {
             payload.instrument,
             payload.frequency,
             payload.durationSec,
-            payload.source
+            payload.source,
+            sourceChannel
         );
     }
 }
